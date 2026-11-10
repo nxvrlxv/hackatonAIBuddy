@@ -7,8 +7,8 @@ CREATE TABLE buddy.documents (
     id           BIGSERIAL PRIMARY KEY,
     team_id      BIGINT      REFERENCES buddy.teams (id), -- NULL = общий документ
     title        TEXT        NOT NULL,
-    source_path  TEXT        NOT NULL,
-    content_hash TEXT        NOT NULL UNIQUE, -- sha256: защита от дублей при повторном ingest
+    source_path  TEXT        NOT NULL UNIQUE,
+    content_hash TEXT        NOT NULL, -- sha256: защита от дублей при повторном ingest
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
