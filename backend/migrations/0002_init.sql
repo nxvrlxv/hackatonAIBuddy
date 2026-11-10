@@ -18,7 +18,7 @@ CREATE TABLE buddy.chunks (
     team_id     BIGINT      REFERENCES buddy.teams (id), -- копия documents.team_id для фильтра без JOIN
     chunk_index INT         NOT NULL,
     content     TEXT        NOT NULL,
-    embedding   vector(768) NOT NULL, -- размерность = размерность модели эмбеддингов
+    embedding   vector(1024) NOT NULL, -- размерность = размерность модели эмбеддингов
     UNIQUE (document_id, chunk_index)
 );
 
