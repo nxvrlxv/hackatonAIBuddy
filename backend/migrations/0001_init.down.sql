@@ -6,4 +6,6 @@ DROP TABLE IF EXISTS buddy.onboarding_stages;
 DROP TABLE IF EXISTS buddy.users;
 DROP TABLE IF EXISTS buddy.teams;
 DROP SCHEMA IF EXISTS buddy; -- без CASCADE: упадёт, если в схеме что-то осталось
+DROP SCHEMA IF EXISTS corporate; -- no CASCADE: preserve unrelated objects
+-- The vector extension is retained as shared infrastructure.
 COMMIT;

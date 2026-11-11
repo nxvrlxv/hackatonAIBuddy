@@ -3,34 +3,36 @@ package migrator
 import (
 	"errors"
 	"fmt"
+	"strings"
 
-	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
 	"github.com/nxvrlxv/ai-buddy/backend/migrations"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-func Run(dbURL string) error {
+// Run applies pending embedded up migrations. An up-to-date database is a success.
+// Only the database URL is needed; application/LLM settings are not required.
+func Run(dbURL string) (resultErr error) {
+	if strings.TrimSpace(dbURL) == "" {
+		return errors.New("DATABASE_URL is required")
+	}
 	driver, err := iofs.New(migrations.FS, ".")
 	if err != nil {
-		return fmt.Errorf("migrate instance error: %w", err)
+		return fmt.Errorf("open embedded migrations: %w", err)
 	}
-	cfg, err := config.Load()
+	m, err := migrate.NewWithSourceInstance("iofs", driver, dbURL)
 	if err != nil {
-		return fmt.Errorf("config loader error: %w", err)
+		_ = driver.Close()
+		return fmt.Errorf("create migrator: %w", err)
 	}
-	m, err := migrate.NewWithSourceInstance("iofs", driver, cfg.DatabaseURL)
-	if err != nil {
-		return fmt.Errorf("migrate instance error: %w", err)
-	}
+	defer func() {
+		sourceErr, databaseErr := m.Close()
+		resultErr = errors.Join(resultErr, sourceErr, databaseErr)
+	}()
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return fmt.Errorf("migration error: %w", err)
+		return fmt.Errorf("apply migrations: %w", err)
 	}
-
-	defer m.Close()
-
 	return nil
 }

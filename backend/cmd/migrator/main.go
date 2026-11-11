@@ -2,14 +2,14 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/nxvrlxv/ai-buddy/backend/internal/migrator"
 )
 
 func main() {
-	dbURL := "postgres://ai_buddy:ai_buddy@db:5432/ai_buddy?sslmode=disable"
-	if err := migrator.Run(dbURL); err != nil {
+	if err := migrator.Run(os.Getenv("DATABASE_URL")); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("migrations applied")
+	log.Println("migrations applied (database is up to date)")
 }

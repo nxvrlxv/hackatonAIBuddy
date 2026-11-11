@@ -1,10 +1,8 @@
 -- Extend the knowledge-base schema created by migration 0002.
 BEGIN;
 
--- A source path identifies a document. Different sources may have equal content.
--- Existing duplicate paths cause a failure instead of silent data deletion.
+-- Add indexing metadata; source_path is already unique in migration 0002.
 ALTER TABLE buddy.documents
-    -- ADD CONSTRAINT documents_source_path_key UNIQUE (source_path),
     ADD COLUMN indexing_version TEXT NOT NULL DEFAULT 'legacy',
     ADD COLUMN updated_at TIMESTAMPTZ;
 
