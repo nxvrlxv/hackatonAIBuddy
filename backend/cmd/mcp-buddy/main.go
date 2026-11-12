@@ -13,8 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/mcpserver"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/rag"
 
-	//"github.com/nxvrlxv/ai-buddy/backend/internal/postgres/buddy"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/postgres/buddy"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -45,13 +46,18 @@ func run() error {
 	defer pool.Close()
 
 	// TODO 4. Репозиторий buddy (сегодня может быть не нужен tool-у, но пригодится завтра).
-	// repo, err := buddy.NewRepository(pool, ctx)
-	// if err != nil {
-	// 	return fmt.Errorf("create repository error: %w", err)
-	// }
-
+	repo, err := buddy.NewRepository(pool, ctx)
+	if err != nil {
+		return fmt.Errorf("create repository error: %w", err)
+	}
+	client, err := rag.NewEmbedClient(cfg)
+	if err != nil {
+		return fmt.Errorf("error creating EmbedClient: %w", err)
+	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "avito-buddy", Version: "v0.1.0"}, nil)
+	svc := rag.NewService(client, repo, 5, 0.6)
 	RegisterServerTools(server)
+	RegisterSearchDocs(server, svc)
 
 	// TODO 6. Зарегистрировать tool ping (или whoami): mcp.AddTool(server, &mcp.Tool{...}, handler).
 

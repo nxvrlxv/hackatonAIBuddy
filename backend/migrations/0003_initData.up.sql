@@ -1,6 +1,7 @@
 insert into buddy.teams (code, name) values ('delivery', 'Команда Авито Доставки');
 insert into buddy.teams (code, name) values ('travel', 'Команда Авито Путешествий');
-insert into buddy.teams (code, name) values ('advert', 'Команда Авито Реклама');
+insert into buddy.teams (code, name) values ('adverts', 'Команда Авито Объявления');
+insert into buddy.teams (code, name) values ('payments', 'Команда Авито Платежи');
 
 insert into buddy.users (login, password_hash, full_name, role, team_id, mentor_id)
 values ('anna_mentor', 'password', 'Анна Смирнова', 'mentor', (

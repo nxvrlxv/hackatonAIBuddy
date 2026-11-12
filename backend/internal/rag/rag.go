@@ -12,8 +12,7 @@ import (
 	"github.com/tmc/langchaingo/embeddings"
 
 	//"github.com/tmc/langchaingo/llms"
-	"github.com/jackc/pgx/v5"
-	"github.com/pgvector/pgvector-go"
+
 	"github.com/tmc/langchaingo/llms/ollama"
 )
 
@@ -56,92 +55,81 @@ func NewEmbedClient(cfg *config.Config) (*EmbedClient, error) {
 	}, nil
 }
 
-// func NewService(client *EmbedClient, topK int) *Service {
-// 	return &Service{
-// 		// repo:   repository,
-// 		client: client,
-// 		topK:   topK,
-// 	}
-// }
+type SearchChunks interface {
+	SearchChunks(ctx context.Context, embedding []float32, teamID *int64, limit int) ([]SearchResult, error)
+}
+
+type ServiceRAG struct {
+	searcherChunks SearchChunks
+	client         *EmbedClient
+	limit          int
+	maxDistance    float64 // косинусное расстояние: чанки дальше порога считаем нерелевантными
+}
+
+func NewService(client *EmbedClient, searcher SearchChunks, limit int, maxDistance float64) *ServiceRAG {
+	return &ServiceRAG{
+		searcherChunks: searcher,
+		client:         client,
+		limit:          limit,
+		maxDistance:    maxDistance,
+	}
+}
 
 // Данная функция находит самый близкий контекст
-func Query(ctx context.Context, embedClient EmbedClient, question string, db *pgx.Conn, teamID *int64) ([]SearchResult, error) {
+func (s *ServiceRAG) Query(ctx context.Context, question string, teamID *int64) ([]SearchResult, error) {
 	question = strings.TrimSpace(question)
 	if question == "" {
 		return nil, fmt.Errorf("question is empty")
 	}
 
-	vectorQ, err := embedClient.Embedder.EmbedQuery(ctx, question)
+	vectorQ, err := s.client.Embedder.EmbedQuery(ctx, question)
 	if err != nil {
 		return nil, fmt.Errorf("some error while embedding question: %w", err)
 	}
+	normalized, err := normalizeQueryVector(vectorQ)
+	if err != nil {
+		return nil, err
+	}
+
+	//БД
+	result, err := s.searcherChunks.SearchChunks(ctx, normalized, teamID, s.limit)
+	if err != nil {
+		return nil, fmt.Errorf("search chunks error: %w", err)
+	}
+
+	// result отсортирован по distance, поэтому после первого далёкого чанка дальше только хуже.
+	// Пустой срез (не nil) означает «в базе знаний ответа нет».
+	relevant := make([]SearchResult, 0, len(result))
+	for _, chunk := range result {
+		if chunk.Distance > s.maxDistance {
+			break
+		}
+		relevant = append(relevant, chunk)
+	}
+
+	return relevant, nil
+}
+
+// normalizeQueryVector приводит вектор вопроса к единичной длине (L2).
+// Нулевой вектор и вектор с NaN/Inf отклоняются.
+func normalizeQueryVector(vector []float32) ([]float32, error) {
 	// Accumulate in float64 so squaring float32 coordinates neither
 	// overflows for large values nor underflows for tiny values.
 	var squaredNorm float64
-	for _, value := range vectorQ {
+	for _, value := range vector {
 		coordinate := float64(value)
 		if math.IsNaN(coordinate) || math.IsInf(coordinate, 0) {
-			return nil, fmt.Errorf("chunk: question embedding contains a non-finite value")
+			return nil, fmt.Errorf("question embedding contains a non-finite value")
 		}
 		squaredNorm += coordinate * coordinate
 	}
 	if squaredNorm == 0 {
-		return nil, fmt.Errorf("chunk: cannot normalize a zero question embedding")
+		return nil, fmt.Errorf("cannot normalize a zero question embedding")
 	}
 	norm := math.Sqrt(squaredNorm)
-	normalized := make([]float32, len(vectorQ))
-	for j, value := range vectorQ {
-		normalized[j] = float32(float64(value) / norm)
+	normalized := make([]float32, len(vector))
+	for i, value := range vector {
+		normalized[i] = float32(float64(value) / norm)
 	}
-
-	//дальше формируем промпт: вопрос полльзователя + системный промпт + контекст из sources
-	queryDB := `SELECT
-    				d.source_path,
-    				d.title,
-    				c.section_title,
-    				c.content,
-    				c.embedding <=> $2::vector AS distance
-				FROM buddy.chunks c
-				JOIN buddy.documents d ON d.id = c.document_id
-				WHERE c.team_id IS NULL OR c.team_id = $1
-				ORDER BY distance
-				LIMIT $3;`
-	// вместо 3 добавить параметр из структуры Service потом
-	vectorText := pgvector.NewVector(normalized).String()
-	rows, err := db.Query(ctx, queryDB, teamID, vectorText, 5)
-	if err != nil {
-		return nil, fmt.Errorf("RAG Search: %w", err)
-	}
-	defer rows.Close()
-	var result []SearchResult
-	for rows.Next() {
-		var chunk SearchResult
-
-		err := rows.Scan(
-			&chunk.SourcePath,
-			&chunk.Title,
-			&chunk.SectionTitle,
-			&chunk.Content,
-			&chunk.Distance,
-		)
-
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, chunk)
-
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read search results: %w", err)
-	}
-	return result, nil
+	return normalized, nil
 }
-
-// func buildContext(sources []repo.Chunk) string {
-// 	var builder strings.Builder
-// 	for i, v := range sources {
-// 		builder.WriteString(fmt.Sprintf("------------\nДокумент №%d\n%s\n", i, v.Content))
-// 	}
-
-// 	return builder.String()
-// }
