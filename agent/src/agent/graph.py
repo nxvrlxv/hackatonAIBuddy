@@ -37,7 +37,9 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         """Найти прошлые разговоры этого пользователя с датами/диапазонами источников."""
         return json.dumps([m.model_dump() for m in memory.search(query)], ensure_ascii=False)[:6000]
 
-    tools = [search_docs, search_history]
+    tools = [search_docs]
+    if settings.history_search_enabled:
+        tools.append(search_history)
     by_name = {t.name: t for t in tools}
     llm = model.bind_tools(tools)
     tool_cost = units([convert_to_openai_tool(t) for t in tools])
@@ -55,7 +57,8 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         key = f"assistant:{step}"
         get_stream_writer()({"type": "message_start", "message_id": key})
         answer = llm.invoke(build_input(
-            user, turn.summary, state["history"], state["messages"], state["memories"]))
+            user, turn.summary, state["history"], state["messages"], state["memories"],
+            history_search_enabled=settings.history_search_enabled))
         # Сохранение до сообщения о завершении. При повторной записи key уникален в run.
         stored = store.append(turn, key, role="assistant", content=answer.content,
                               tool_calls=answer.tool_calls, status="completed")

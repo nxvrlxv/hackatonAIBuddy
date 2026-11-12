@@ -35,17 +35,42 @@ class GoStore:
         return self.request("GET", f"/conversations/{cid}/messages",
                             params={"limit": 50, **({"before": before} if before else {})})
 
+    def decode_message(self, data, cid):
+        data = dict(data)
+        if data.get("conversation_id", cid) != cid:
+            raise AgentError("owner_mismatch", 403)
+        data["status"] = data.get("payload", {}).get("status", data.get("status", "completed"))
+        return Message.model_validate(data)
+
     def begin(self, cid, content, client_id):
-        turn = Turn.model_validate(self.request("POST", f"/conversations/{cid}/turns",
-            json={"content": content, "client_message_id": client_id}))
+        data = self.request("POST", f"/conversations/{cid}/turns",
+            json={"payload": {"content": content}, "client_message_id": client_id})
+        if data.get("user_id", self.user.id) != self.user.id or data.get("conversation_id", cid) != cid:
+            raise AgentError("owner_mismatch", 403)
+        turn = Turn(run_id=data["run_id"], conversation_id=cid, user_id=self.user.id,
+                    summary=data["summary"],
+                    user_message=self.decode_message(data["user_message"], cid),
+                    history=[self.decode_message(m, cid) for m in data["history"]])
+        if turn.user_message.run_id != turn.run_id:
+            raise AgentError("invalid_run")
+        from memory.context import complete_history
+        turn.history = complete_history(turn.history)
         if turn.user_id != self.user.id or turn.conversation_id != cid:
             raise AgentError("owner_mismatch", 403)
         return turn
 
     def append(self, turn, key, **message):
-        return Message.model_validate(self.request(
+        data = storage_message(message)
+        status = data.pop("status", "completed")
+        if status != "completed":
+            data["payload"]["status"] = status
+        result = self.request(
             "POST", f"/conversations/{turn.conversation_id}/runs/{turn.run_id}/messages",
-            json={"event_key": key, **storage_message(message)}))
+            json={"event_key": key, **data})
+        stored = self.decode_message(result, turn.conversation_id)
+        if stored.run_id != turn.run_id:
+            raise AgentError("invalid_run")
+        return stored
 
     def save_summary(self, turn, summary):
         return Summary.model_validate(self.request(

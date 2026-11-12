@@ -9,14 +9,15 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/auth"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/mcpserver"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/rag"
 
 	"github.com/nxvrlxv/ai-buddy/backend/internal/postgres/buddy"
 
+	mcpauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -26,26 +27,26 @@ func main() {
 	}
 }
 
-// run отделена от main, чтобы defer-ы срабатывали до выхода:
-// log.Fatal в main вызывает os.Exit и defer-ы пропускает.
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// TODO 2. Загрузить конфиг; при ошибке вернуть её.
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("load conf error: %w", err)
 	}
 
-	// TODO 3. Пул через postgres; defer pool.Close().
+	jwtManager, err := auth.NewManager(cfg.JWTSecret, 24*time.Hour)
+	if err != nil {
+		return fmt.Errorf("create jwt manager: %w", err)
+	}
+
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("create pool error: %w", err)
 	}
 	defer pool.Close()
 
-	// TODO 4. Репозиторий buddy (сегодня может быть не нужен tool-у, но пригодится завтра).
 	repo, err := buddy.NewRepository(pool, ctx)
 	if err != nil {
 		return fmt.Errorf("create repository error: %w", err)
@@ -58,13 +59,12 @@ func run() error {
 	svc := rag.NewService(client, repo, 5, 0.6)
 	RegisterServerTools(server)
 	RegisterSearchDocs(server, svc)
-
-	// TODO 6. Зарегистрировать tool ping (или whoami): mcp.AddTool(server, &mcp.Tool{...}, handler).
+	RegisterWhoAmI(server, repo)
 
 	return mcpserver.Run(ctx, mcpserver.Options{
 		Addr:            ":" + cfg.Port,
 		MCPServer:       server,
-		Middleware:      nil, // JWT завтра
+		Middleware:      mcpauth.RequireBearerToken(mcpserver.Verifier(jwtManager), nil),
 		ShutdownTimeout: 10 * time.Second,
 	})
 }

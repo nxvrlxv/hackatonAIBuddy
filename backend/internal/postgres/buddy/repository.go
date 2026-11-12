@@ -4,12 +4,23 @@ import (
 	"context"
 	"fmt"
 
-	_ "github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// DB — то, что репозиторию нужно от пула. Его реализуют *pgxpool.Pool и pgxmock (в тестах).
+type DB interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+var _ DB = (*pgxpool.Pool)(nil)
+
 type Repository struct {
-	pool *pgxpool.Pool
+	pool DB
 }
 
 func NewRepository(pool *pgxpool.Pool, ctx context.Context) (*Repository, error) {
@@ -22,4 +33,9 @@ func NewRepository(pool *pgxpool.Pool, ctx context.Context) (*Repository, error)
 	return &Repository{
 		pool: pool,
 	}, nil
+}
+
+// NewRepositoryFromDB оборачивает произвольный DB без проверки соединения (для тестов).
+func NewRepositoryFromDB(db DB) *Repository {
+	return &Repository{pool: db}
 }

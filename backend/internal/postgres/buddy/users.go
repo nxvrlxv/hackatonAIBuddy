@@ -30,3 +30,25 @@ func (r *Repository) GetUserByLogin(ctx context.Context, login string) (*auth.Us
 
 	return &user, nil
 }
+
+func (r *Repository) GetUserByID(ctx context.Context, userID int64) (*auth.User, error) {
+	row := r.pool.QueryRow(ctx, `
+	select u.id, u.login, u.full_name, u.role, t.id, t.name, m.full_name
+	from buddy.users u
+	join buddy.teams t on u.team_id = t.id
+	left join buddy.users m on m.id = u.mentor_id
+	where u.id = $1
+	`, userID)
+
+	var user auth.User
+
+	err := row.Scan(&user.ID, &user.Login, &user.FullName, &user.Role, &user.TeamID, &user.Team, &user.Mentor)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("user not found: %w", auth.ErrNotFound)
+		}
+		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+
+	return &user, nil
+}

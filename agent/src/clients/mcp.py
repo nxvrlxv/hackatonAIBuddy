@@ -45,7 +45,7 @@ class MCPGateway:
 
     def whoami(self, token):
         try:
-            data = self.call(self.settings.whoami_tool, {"token": token}, token)
+            data = self.call(self.settings.whoami_tool, {}, token)
             return User.model_validate(data)
         except Exception:
             raise AgentError("identity_unverified", 401) from None

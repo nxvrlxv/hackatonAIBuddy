@@ -19,8 +19,10 @@ class PreparedTurn:
 
     def finish(self, status):
         if not self.finished:
-            self.store.finish(self.turn, status)
+            result = self.store.finish(self.turn, status)
             self.finished = True
+            if result["status"] != status:
+                raise AgentError("run_not_active", 409)
 
     def close(self):
         if self.finished:
@@ -43,7 +45,8 @@ class PreparedTurn:
                                         "user_message_id": self.turn.user_message.id})
             yield sse_event("status", {"text": "Пользователь проверен. Восстанавливаю контекст"})
             try:
-                memories = memory.search(str(self.turn.user_message.content))
+                memories = (memory.search(str(self.turn.user_message.content))
+                            if s.settings.history_search_enabled else [])
             except Exception:
                 memories = []
                 yield sse_event("warning", {"code": "history_search_unavailable"})
@@ -86,7 +89,8 @@ class PreparedTurn:
             # Сначала фиксируем ход. Go индексирует только завершённые ходы.
             self.finish("completed")
             try:
-                memory.index(self.turn)
+                if s.settings.history_search_enabled:
+                    memory.index(self.turn)
             except Exception:
                 yield sse_event("warning", {"code": "index_pending"})
             yield sse_event("done", {"run_id": self.turn.run_id})

@@ -18,9 +18,14 @@ def units(value):
     # оценка размерности по байтам, НЕ точный tokenizer модели
     return len(text_of(value).encode("utf-8")) + 32
 
-def build_input(user, summary, history, active, memories):
+def build_input(user, summary, history, active, memories, history_search_enabled=True):
+    prompt = SYSTEM_PROMPT
+    if not history_search_enabled:
+        prompt = prompt.replace(
+            "Для вопроса о предыдущих обсуждениях используй search_history при необходимости.",
+            "Поиск по другим чатам отключён. Используй только предоставленную историю.")
     messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=prompt),
         SystemMessage(content="Проверенный профиль пользователя (JSON):\n" + user.model_dump_json()),
     ]
     if summary.text:
@@ -47,13 +52,17 @@ class ContextManager:
         summary = turn.summary
         history, memories = list(history), list(memories)
         budget = self.settings.input_budget - tool_cost
-        while input_size(build_input(user, summary, history, active, memories)) > budget:
+        while input_size(build_input(user, summary, history, active, memories,
+                                     self.settings.history_search_enabled)) > budget:
             if memories:
                 memories.pop()  # сначала убираем менее релевантные результаты
                 continue
             if not history:
                 raise AgentError("context_too_large", 422)
             old, history = first_turn(history)
+            if not self.settings.summary_enabled:
+                # Убираем только из контекста, исходные сообщения остаются в Go.
+                continue
             # Даже длинный старый ход обрабатывается ограниченными порциями.
             raw = "\n".join(f"{m.role}: {text_of(m.content)}" for m in old)
             parts, current = [], ""
@@ -87,3 +96,33 @@ class ContextManager:
             summary = store.save_summary(turn, summary)
             turn.summary = summary
         return summary, history, memories
+
+
+def complete_history(history):
+    """Go ограничивает историю числом сообщений: отбрасываем оборванные ходы."""
+    from itertools import groupby
+    result = []
+    for _, group in groupby(history, key=lambda m: m.run_id):
+        batch = list(group)
+        if (batch[0].role != "user" or batch[-1].role != "assistant"
+                or batch[-1].tool_calls or any(m.status != "completed" for m in batch)):
+            continue
+        pending = set()
+        valid = True
+        for i, message in enumerate(batch):
+            if message.role == "system" or (message.role == "user" and i != 0):
+                valid = False
+                break
+            if message.role == "assistant":
+                if pending:
+                    valid = False
+                    break
+                pending = {c["id"] for c in message.tool_calls}
+            elif message.role == "tool":
+                if message.tool_call_id not in pending:
+                    valid = False
+                    break
+                pending.remove(message.tool_call_id)
+        if valid and not pending:
+            result.extend(batch)
+    return result

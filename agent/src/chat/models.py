@@ -44,7 +44,10 @@ class Message(BaseModel):
     id: int
     sequence_number: int
     run_id: str
-    role: Literal["user", "assistant", "tool"]
+    role: Literal["user", "assistant", "tool", "system"]
+    conversation_id: int | None = None
+    event_key: str | None = None
+    created_at: str | None = None
     payload: MessagePayload
     status: Literal["completed", "interrupted", "failed"] = "completed"
 
@@ -62,6 +65,8 @@ class Message(BaseModel):
         return self.payload.tool_call_id
 
     def as_langchain(self):
+        if self.role == "system":
+            raise AgentError("untrusted_system_history")
         if self.role == "user":
             return HumanMessage(content=self.content)
         if self.role == "tool":

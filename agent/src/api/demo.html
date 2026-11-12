@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-buddy — память</title>
+<style>
+body{max-width:820px;margin:35px auto;padding:0 20px;font:17px/1.5 system-ui;background:#f5f7fa;color:#182536}
+textarea{width:100%;box-sizing:border-box;min-height:100px;padding:12px;font:inherit}
+button,select{padding:9px;margin:8px 6px 8px 0}pre{white-space:pre-wrap;background:white;padding:15px;border-radius:8px}
+#status{color:#526174}.hint{font-size:14px;color:#526174}
+</style>
+<h1>AI-buddy: память между чатами</h1>
+<p class="hint">Демо: пользователи и хранилище имитируют Go; данные живут только до перезапуска.
+Ответы и резюме генерирует настоящая Ollama. Поиск в демо — по словам.</p>
+<select id="user"><option value="demo-alice">Аня</option><option value="demo-bob">Борис</option></select>
+<select id="chat"></select><button id="new">Новый чат</button>
+<div id="history"></div>
+<form id="form"><textarea id="prompt" required maxlength="12000" placeholder="Расскажи о своей задаче…"></textarea>
+<button id="send">Отправить</button><button type="button" id="stop" disabled>Остановить</button></form>
+<p id="status">Выбери или создай чат</p><pre id="answer"></pre>
+<script>
+const $=id=>document.getElementById(id);
+let controller, busy=false;
+const headers=()=>({"Content-Type":"application/json","Authorization":"Bearer "+$("user").value});
+async function api(path,options={}){
+ const r=await fetch(path,{...options,headers:headers()});
+ if(!r.ok)throw new Error("HTTP "+r.status+": "+await r.text());
+ return r.json();
+}
+async function refreshChats(){
+ const data=await api("/internal/conversations"); $("chat").replaceChildren();
+ for(const c of data.conversations){const o=new Option(c.title,c.id);$("chat").add(o);}
+ await history();
+}
+async function history(){
+ $("history").replaceChildren();
+ if(!$("chat").value)return;
+ const data=await api("/internal/conversations/"+$("chat").value+"/messages");
+ for(const m of data.messages){
+  if(m.role==="tool" || !m.payload.content)continue;
+  const p=document.createElement("pre");p.textContent=m.role+": "+(typeof m.payload.content==="string"?m.payload.content:JSON.stringify(m.payload.content));
+  $("history").append(p);
+ }
+}
+$("new").onclick=async()=>{try{
+ const c=await api("/internal/conversations",{method:"POST",body:JSON.stringify({title:"Чат "+new Date().toLocaleTimeString()})});
+ await refreshChats();$("chat").value=c.id;await history();
+}catch(e){$("status").textContent=e.message;}};
+$("user").onchange=()=>refreshChats().catch(e=>$("status").textContent=e.message);
+$("chat").onchange=()=>history().catch(e=>$("status").textContent=e.message);
+$("stop").onclick=()=>controller?.abort();
+$("form").onsubmit=async e=>{
+ e.preventDefault();if(busy)return;
+ if(!$("chat").value){$("status").textContent="Сначала создай чат";return;}
+ busy=true;controller=new AbortController();
+ for(const id of ["send","user","chat","new"])$(id).disabled=true;
+ $("stop").disabled=false;$("answer").textContent="";$("status").textContent="Проверяю пользователя…";
+ let terminal=false, warnings=[];
+ function consume(frame){
+  const lines=frame.split("\n"),name=lines.find(x=>x.startsWith("event:"))?.slice(6).trim();
+  const raw=lines.filter(x=>x.startsWith("data:")).map(x=>x.slice(5).trimStart()).join("\n");if(!raw)return;
+  const data=JSON.parse(raw);
+  if(name==="status")$("status").textContent=data.text;
+  if(name==="message_start" && $("answer").textContent)$("answer").textContent+="\n";
+  if(name==="text_delta")$("answer").textContent+=data.text;
+  if(name==="warning")warnings.push(data.code);
+  if(name==="done"){terminal=true;$("status").textContent="Готово"+(warnings.length?"; "+warnings.join(", "):"");}
+  if(name==="error"){terminal=true;$("status").textContent="Ошибка: "+data.code;}
+ }
+ try{
+  const r=await fetch("/internal/chat",{method:"POST",headers:headers(),signal:controller.signal,
+   body:JSON.stringify({conversation_id:Number($("chat").value),client_message_id:crypto.randomUUID(),content:$("prompt").value})});
+  if(!r.ok)throw new Error("HTTP "+r.status+": "+await r.text());
+  const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+  while(true){
+   const {value,done}=await reader.read();buffer+=done?decoder.decode():decoder.decode(value,{stream:true});
+   let i;while((i=buffer.indexOf("\n\n"))!==-1){consume(buffer.slice(0,i));buffer=buffer.slice(i+2);}
+   if(done)break;
+  }
+  if(!terminal)throw new Error("Поток оборвался до завершения");
+  await history();$("answer").textContent="";$("prompt").value="";
+ }catch(error){$("status").textContent=error.name==="AbortError"?"Остановлено; частичный ответ может быть сохранён":error.message;}
+ finally{busy=false;for(const id of ["send","user","chat","new"])$(id).disabled=false;$("stop").disabled=true;}
+};
+refreshChats().catch(e=>$("status").textContent=e.message);
+</script></html>

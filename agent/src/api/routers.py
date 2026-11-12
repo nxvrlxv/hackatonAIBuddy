@@ -89,5 +89,7 @@ def chat():
 def reindex(cid):
     # Go сам выбирает неиндексированные ходы и вычисляет эмбеддинги.
     _, store = service().identify(credentials())
+    if not current_app.extensions["settings"].history_search_enabled:
+        raise AgentError("history_search_disabled", 409)
     result = store.reindex(cid)
     return jsonify(result), (200 if result["failed"] == 0 else 503)

@@ -8,6 +8,12 @@ def required(name):
         raise ValueError(f"Не задана переменная окружения {name}")
     return value
 
+def flag(name):
+    value = required(name).lower()
+    if value not in ("true", "false"):
+        raise ValueError(f"{name}: ожидается true или false")
+    return value == "true"
+
 @dataclass(frozen=True)
 class Settings:
     mode: str
@@ -23,6 +29,8 @@ class Settings:
     summary_chars: int
     max_steps: int
     timeout: float
+    history_search_enabled: bool
+    summary_enabled: bool
 
     @property
     def input_budget(self):
@@ -35,6 +43,8 @@ class Settings:
             raise ValueError("AGENT_MODE должен быть go или demo")
         s = cls(
             mode=mode,
+            history_search_enabled=flag("HISTORY_SEARCH_ENABLED"),
+            summary_enabled=flag("SUMMARY_ENABLED"),
             service_key=required("AGENT_SERVICE_TOKEN") if mode == "go" else "",
             go_url=required("GO_API_URL") if mode == "go" else "",
             mcp_url=required("MCP_URL") if mode == "go" else "",
