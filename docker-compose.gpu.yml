@@ -1,0 +1,4 @@
+# Опциональное ускорение NVIDIA. Использовать вместе с docker-compose.yml.
+services:
+  ollama:
+    gpus: all

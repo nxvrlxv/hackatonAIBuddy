@@ -19,6 +19,7 @@ class Settings:
     mode: str
     service_key: str
     go_url: str
+    public_go_url: str
     mcp_url: str
     whoami_tool: str
     ollama_url: str
@@ -47,6 +48,7 @@ class Settings:
             summary_enabled=flag("SUMMARY_ENABLED"),
             service_key=required("AGENT_SERVICE_TOKEN") if mode == "go" else "",
             go_url=required("GO_API_URL") if mode == "go" else "",
+            public_go_url=required("PUBLIC_GO_API_URL") if mode == "go" else "",
             mcp_url=required("MCP_URL") if mode == "go" else "",
             whoami_tool=required("WHOAMI_TOOL") if mode == "go" else "",
             ollama_url=required("OLLAMA_URL"),

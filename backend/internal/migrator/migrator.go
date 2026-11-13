@@ -3,6 +3,7 @@ package migrator
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/nxvrlxv/ai-buddy/backend/migrations"
@@ -17,6 +18,10 @@ import (
 func Run(dbURL string) (resultErr error) {
 	if strings.TrimSpace(dbURL) == "" {
 		return errors.New("DATABASE_URL is required")
+	}
+	dbURL, err := migrationURL(dbURL)
+	if err != nil {
+		return err
 	}
 	driver, err := iofs.New(migrations.FS, ".")
 	if err != nil {
@@ -35,4 +40,17 @@ func Run(dbURL string) (resultErr error) {
 		return fmt.Errorf("apply migrations: %w", err)
 	}
 	return nil
+}
+
+// migrationURL pins bookkeeping to public even after schema "$user" appears.
+func migrationURL(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") {
+		return "", errors.New("DATABASE_URL must be a valid PostgreSQL URL")
+	}
+	query := parsed.Query()
+	query.Set("x-migrations-table", `"public"."schema_migrations"`)
+	query.Set("x-migrations-table-quoted", "true")
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
 }

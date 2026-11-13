@@ -107,6 +107,9 @@ def main():
                 image = "agent" if service == "agent" else "backend"
                 overrides += [f"    image: ai-buddy-{image}:integration"]
         overrides += [
+            "  ollama-models:", "    image: ai-buddy-agent:integration",
+            "    depends_on: !reset {}", "    entrypoint: !override [\"python\", \"-c\", \"pass\"]",
+            "    command: !reset []",
             "  mock-ollama:", "    image: ai-buddy-agent:integration",
             '    command: ["python", "/mock.py"]', "    volumes:",
             f"      - {tmp / 'mock.py'}:/mock.py:ro",
@@ -121,6 +124,7 @@ def main():
             run("config","--quiet")
             run("build","api","agent")
             run("up","--no-build","-d","--wait","--wait-timeout","120","mock-ollama","agent")
+            run("run","--rm","migrator")  # Repeated run must use the same version table.
             run("exec","-T","agent","python","-",input=CLIENT,text=True)
             result=run("exec","-T","postgres","psql","-U","buddy","-d","buddy",
                        "-Atc","SELECT count(*) FROM buddy.runs WHERE status='completed';",

@@ -12,7 +12,7 @@ class MVPTests(unittest.TestCase):
     send = test_chat.AgentTests.send
     def test_disabled_memory_handles_long_chat_without_summary(self):
         service = self.app.extensions["chat_service"]
-        service.settings = make_settings(context_tokens=7000,
+        service.settings = make_settings(context_tokens=9500,
             history_search_enabled=False, summary_enabled=False)
         service.summary_model = Mock()
         factory = service.store_factory
@@ -49,6 +49,19 @@ class MVPTests(unittest.TestCase):
         self.assertNotIn("done", [name for name, _ in ev])
 
 class ContractTests(unittest.TestCase):
+    def test_live_demo_uses_public_go_url_without_service_key(self):
+        import test_chat
+        from main import create_app
+        app = create_app(make_settings(mode="go", service_key="private-service-key"),
+                         model=test_chat.TextModel(responses=["OK"]))
+        page = app.test_client().get("/demo")
+        self.assertEqual(page.status_code, 200)
+        text = page.get_data(as_text=True)
+        self.assertIn('"public_go_url": "http://localhost:8080"', text)
+        self.assertIn('/api/login', text)
+        self.assertNotIn('private-service-key', text)
+        self.assertNotIn('X-Agent-Key', text)
+
     def test_whoami_has_empty_arguments(self):
         gateway = MCPGateway(make_settings())
         gateway.call = Mock(return_value={"id":1,"full_name":"Аня","role":"intern"})

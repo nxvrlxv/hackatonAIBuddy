@@ -220,3 +220,10 @@ React + TypeScript.
 | `docs/specs/`, `docs/metrics.md`, `README.md` | вся команда, с назначенным ответственным |
 
 Граница между backend и агентом проходит по протоколу MCP: агенту нужны только адреса серверов, список tools и способ передачи токена пользователя.
+
+## Запуск стенда с Ollama
+
+Сервисы Compose, загрузка моделей, настройка GPU и адреса для Go/Python:
+[Docker Compose и Ollama](docs/docker-compose.md).
+
+[Проверка настоящего чата и RAG](docs/rag-testing.md). HTML: http://localhost:8001/demo.

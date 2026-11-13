@@ -15,7 +15,7 @@ from demo.backend import MemoryBackend, DemoGateway
 from memory.context import ContextManager, build_input, input_size
 
 def make_settings(**overrides):
-    values = dict(mode="demo", service_key="test-service", go_url="http://go.test",
+    values = dict(mode="demo", service_key="test-service", go_url="http://go.test", public_go_url="http://localhost:8080",
         mcp_url="http://mcp.test/mcp", whoami_tool="whoami", ollama_url="http://ollama.test",
         model="test-model", context_tokens=16384, output_tokens=1024, safety_tokens=1024,
         summary_chars=1600, max_steps=6, timeout=5,
@@ -106,7 +106,7 @@ class AgentTests(unittest.TestCase):
             def on_chat_model_start(self, serialized, messages, **kwargs):
                 seen.append(messages[0])
         service = self.app.extensions["chat_service"]
-        service.settings = replace(service.settings, context_tokens=7000)
+        service.settings = replace(service.settings, context_tokens=9500)
         service.model = TextModel(responses=["Ответ"], callbacks=[Capture()])
         # Первый запрос помещается, второй требует сжатия предыдущего хода.
         self.assertEqual(events(self.send("Git " + "a" * 2000))[-1][0], "done")
@@ -204,7 +204,7 @@ class AgentTests(unittest.TestCase):
 
     def test_summary_text_is_not_streamed(self):
         service = self.app.extensions["chat_service"]
-        service.settings = replace(service.settings, context_tokens=7000)
+        service.settings = replace(service.settings, context_tokens=9500)
         service.summary_model = TextModel(responses=["HIDDEN-SUMMARY"])
         self.send("a"*2000)
         response = self.send("b"*2200)

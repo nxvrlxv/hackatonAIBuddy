@@ -28,7 +28,7 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
     # Токен только в замыкании транспорта: в state и схемах tools его нет.
     @tool
     def search_docs(query: str) -> str:
-        """Найти актуальные корпоративные инструкции. Используй для правил и доступов."""
+        """Поиск корпоративных фактов: миссия и ценности Авито, команды, продукты, проекты, правила и доступы. Обязательно используй перед ответом на вопросы о компании; не подменяй поиск сведениями из профиля пользователя."""
         result = gateway.search_docs(query, token)
         return json.dumps(result, ensure_ascii=False)[:6000]
 

@@ -121,3 +121,8 @@ Compose содержит postgres, migrator, api, mcp-buddy, agent, отдель
 Адреса: api:8080, mcp-buddy:8090/mcp, agent:8001.
 Корневой .env задаёт AGENT_KEY; Compose передаёт его Python как AGENT_SERVICE_TOKEN.
 agent/.env необязателен. Остальные параметры перечислены в .env.example.
+
+Ollama теперь отдельный сервис: внутри сети http://ollama:11434.
+Go получает EMBEDDED_MODEL=qwen3-embedding:0.6b, Python —
+OLLAMA_MODEL=qwen3:4b-instruct. Загрузчик ollama-models устанавливает обе модели.
+Настройки и URL: [Docker Compose](../docs/docker-compose.md).

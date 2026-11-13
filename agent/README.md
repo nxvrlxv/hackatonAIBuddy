@@ -30,7 +30,11 @@ Go и Python получают один сервисный ключ: Compose по
 agent/.env — необязательные дополнительные настройки агента; адреса сервисов и
 сервисный ключ Compose задаёт явно. Не включайте отложенные возможности в go-режиме.
 
-Ollama должна быть доступна по OLLAMA_DOCKER_URL, диалоговая модель — OLLAMA_MODEL.
+Ollama запускается отдельным контейнером. ollama-models скачивает
+qwen3-embedding:0.6b и qwen3:4b-instruct до запуска агента и MCP.
+Внутри Compose OLLAMA_DOCKER_URL=http://ollama:11434;
+для локального Python OLLAMA_URL=http://localhost:11434.
+Подробности, GPU и таблица URL: [Docker Compose](../docs/docker-compose.md).
 Эмбеддинги корпоративных документов настраивает Go через EMBEDDED_MODEL.
 Для наполнения базы корпоративных документов отдельно запускается ingest:
 ```bash
@@ -97,7 +101,7 @@ HTTP-ошибки возможны до начала потока; после н
 - src/clients/mcp.py: MCP; токен только в HTTP-заголовке.
 - src/api/routers.py: внутренний HTTP API.
 - src/demo/backend.py: учебное хранилище в RAM.
-- src/api/demo.html: форма для demo.
+- src/api/demo.html: форма /demo для настоящего Go API и учебного режима.
 
 Сообщения содержат payload JSONB с content, tool_calls, tool_call_id.
 Статус обработки находится в runs. Частичные сообщения Python дополнительно
@@ -144,3 +148,9 @@ python tests/smoke_compose.py
 ```
 Тест собирает образы, создаёт отдельный Compose-проект без открытых портов,
 проверяет поток и хранение, затем удаляет только свой стенд и его временную БД.
+
+## Настоящий чат и RAG
+
+Откройте http://localhost:8001/demo. В go-режиме HTML использует публичный Go API,
+тестовые логины и настоящую БД. PUBLIC_GO_API_URL задаёт адрес Go для браузера.
+[Проверка чата и RAG](../docs/rag-testing.md): индексация, вопросы и SQL-проверки.

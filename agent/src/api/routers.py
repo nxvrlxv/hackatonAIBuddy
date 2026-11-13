@@ -1,7 +1,7 @@
 """Внутренний API агента. Go проксирует SSE, но не отдаёт credential браузеру."""
 import secrets
 from pathlib import Path
-from flask import Blueprint, Response, current_app, jsonify, request, send_file
+from flask import Blueprint, Response, current_app, jsonify, request, render_template_string
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from chat.models import AgentError
 
@@ -47,8 +47,17 @@ def validation_error(exc):
 @router.get("/")
 def demo():
     if current_app.extensions["settings"].mode != "demo":
-        return jsonify(service="ai-buddy", mode="go", endpoint="/internal/chat")
-    return send_file(Path(__file__).with_name("demo.html"))
+        return jsonify(service="ai-buddy", mode="go", endpoint="/internal/chat", demo="/demo")
+    return demo_page()
+
+@router.get("/demo")
+def demo_page():
+    settings = current_app.extensions["settings"]
+    return render_template_string(Path(__file__).with_name("demo.html").read_text(), demo_config={
+        "mode": settings.mode, "public_go_url": settings.public_go_url,
+        "history_search_enabled": settings.history_search_enabled,
+        "summary_enabled": settings.summary_enabled,
+    })
 
 @router.get("/healthz")
 def health():
