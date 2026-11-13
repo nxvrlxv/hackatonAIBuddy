@@ -20,3 +20,10 @@ INSERT INTO buddy.users (login, password_hash, full_name, role, team_id, mentor_
     ('maria.intern', '!', 'Мария Козлова', 'intern',
         (SELECT id FROM buddy.teams WHERE code = 'delivery'),
         (SELECT id FROM buddy.users WHERE login = 'vasya_mentor'));
+
+-- стажёры без наставника: в adverts и payments наставников пока нет
+INSERT INTO buddy.users (login, password_hash, full_name, role, team_id, mentor_id) VALUES
+    ('petya.intern', '!', 'Пётр Соколов', 'intern',
+        (SELECT id FROM buddy.teams WHERE code = 'adverts'), NULL),
+    ('olga.intern', '!', 'Ольга Морозова', 'intern',
+        (SELECT id FROM buddy.teams WHERE code = 'payments'), NULL);

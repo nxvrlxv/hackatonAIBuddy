@@ -13,6 +13,8 @@ type Config struct {
 	Port        string
 	JWTSecret   string
 	FileStore   string
+	AgentKey    string // общий секрет api ↔ agent (заголовок X-Agent-Key)
+	AgentURL    string // адрес Python-агента
 }
 
 func Load() (*Config, error) {
@@ -50,6 +52,16 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("Can't load jwt secret, empty")
 	}
 
+	agentKey := os.Getenv("AGENT_KEY")
+	if agentKey == "" {
+		return nil, fmt.Errorf("empty agent key")
+	}
+
+	agentURL := os.Getenv("AGENT_URL")
+	if agentURL == "" {
+		agentURL = "http://agent:8001"
+	}
+
 	return &Config{
 		DatabaseURL: dbURL,
 		Port:        port,
@@ -58,5 +70,7 @@ func Load() (*Config, error) {
 		JWTSecret:   jwtSecret,
 		EmbedModel:  embedModel,
 		FileStore:   fileStore,
+		AgentKey:    agentKey,
+		AgentURL:    agentURL,
 	}, nil
 }

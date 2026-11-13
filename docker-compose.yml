@@ -1,5 +1,20 @@
+# Общие настройки Go-сервисов: один образ, переменные из .env.
+# DATABASE_URL и адреса соседей задаются здесь — внутри сети compose обращаемся по именам сервисов.
+x-backend: &backend
+  build: ./backend
+  image: ai-buddy-backend
+  env_file:
+    - .env
+  # Ollama крутится на хосте; на Linux host.docker.internal нужно объявить явно.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+  OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://host.docker.internal:11434}
+
 services:
-  db:
+  postgres:
     image: pgvector/pgvector:pg16
     env_file: .env
     environment:
@@ -17,18 +32,114 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
-  
+
+  # Одноразовый: применяет миграции и выходит.
   migrator:
-    build: ./backend
-    image: ai-buddy-backend
+    <<: *backend
     command: ["/app/migrate"]
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      <<: *backend-env
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     restart: "no"
+
+  # Одноразовый: индексирует data/knowledge в pgvector. Нужна запущенная Ollama на хосте.
+  # Остальные сервисы его не ждут: упавшая индексация не должна ронять стенд.
+  ingest:
+    <<: *backend
+    command: ["/app/ingest", "-iv", "${INDEX_VERSION:-v1}"]
+    environment:
+      <<: *backend-env
+      KNOWLEDGE_PATH: /data/knowledge
+    volumes:
+      - ./data/knowledge:/data/knowledge:ro
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    <<: *backend
+    command: ["/app/api"]
+    environment:
+      <<: *backend-env
+      PORT: "8080"
+      AGENT_URL: http://agent:8001
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  mcp-buddy:
+    <<: *backend
+    command: ["/app/mcp-buddy"]
+    environment:
+      <<: *backend-env
+      PORT: "8090"
+    ports:
+      - "8090:8090"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # TODO(этап 7): mcp-corporate:8091 — main.go пока пустой, бинарь не собирается.
+  # mcp-corporate:
+  #   <<: *backend
+  #   command: ["/app/mcp-corporate"]
+  #   environment:
+  #     <<: *backend-env
+  #     PORT: "8091"
+  #   ports:
+  #     - "8091:8091"
+  #   depends_on:
+  #     migrator:
+  #       condition: service_completed_successfully
+  #   restart: unless-stopped
+
+  # TODO: агент (Python) — раскомментировать, когда в ./agent появится Dockerfile.
+  # agent:
+  #   build: ./agent
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     PORT: "8001"
+  #     BACKEND_URL: http://api:8080
+  #     MCP_BUDDY_URL: http://mcp-buddy:8090/mcp
+  #     OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://host.docker.internal:11434}
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+  #   ports:
+  #     - "8001:8001"
+  #   depends_on:
+  #     mcp-buddy:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+  # TODO: фронтенд — раскомментировать, когда в ./frontend появятся package.json и Dockerfile.
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:80"
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
 volumes:
   pg_data:

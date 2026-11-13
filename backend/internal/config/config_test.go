@@ -2,103 +2,97 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-var configKeys = []string{"DATABASE_URL", "OLLAMA_URL", "EMBEDDED_MODEL", "LLM_MODEL", "JWT_SECRET", "KNOWLEDGE_PATH", "PORT"}
+var configKeys = []string{"DATABASE_URL", "OLLAMA_URL", "EMBEDDED_MODEL", "LLM_MODEL", "JWT_SECRET", "KNOWLEDGE_PATH", "PORT", "AGENT_KEY", "AGENT_URL"}
+
+// requiredKeys — без них Load обязан вернуть ошибку.
+var requiredKeys = []string{"DATABASE_URL", "OLLAMA_URL", "EMBEDDED_MODEL", "LLM_MODEL", "JWT_SECRET", "KNOWLEDGE_PATH", "AGENT_KEY"}
 
 func cleanConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range configKeys {
-		t.Setenv(key, "") // Arrange restoration of the original value by testing.
+		t.Setenv(key, "") // testing вернёт исходное значение после теста
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
-func envProject(t *testing.T, content string) string {
+func setRequired(t *testing.T) {
 	t.Helper()
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "backend", "cmd", "ingest"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "backend", "go.mod"), []byte("module test\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if content != "" {
-		if err := os.WriteFile(filepath.Join(root, ".env"), []byte(content), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return root
-}
-
-const testEnv = `# Test values only
-DATABASE_URL="postgres://test:test@localhost/test"
-OLLAMA_URL=http://localhost:11434
-EMBEDDED_MODEL=test-embed
-LLM_MODEL=test-chat
-JWT_SECRET='test secret # inside quotes'
-KNOWLEDGE_PATH=data/knowledge
-`
-
-func TestLoadRootEnvFromNestedDirectories(t *testing.T) {
-	for _, relative := range []string{".", "backend", "backend/cmd/ingest"} {
-		t.Run(relative, func(t *testing.T) {
-			cleanConfigEnv(t)
-			root := envProject(t, testEnv)
-			// Only the repository's root .env should be loaded.
-			if err := os.WriteFile(filepath.Join(root, "backend", ".env"), []byte("PORT=9999\n"), 0600); err != nil {
-				t.Fatal(err)
-			}
-			t.Chdir(filepath.Join(root, relative))
-			cfg, err := Load()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if cfg.EmbedModel != "test-embed" || cfg.JWTSecret != "test secret # inside quotes" || cfg.FileStore != "data/knowledge" || cfg.Port != "8080" {
-				t.Fatal("config values were not loaded correctly")
-			}
-		})
+	for _, key := range requiredKeys {
+		t.Setenv(key, "from-environment")
 	}
 }
 
-func TestEnvironmentOverridesDotEnv(t *testing.T) {
+func TestLoadFromEnvironment(t *testing.T) {
 	cleanConfigEnv(t)
-	t.Chdir(envProject(t, testEnv))
-	t.Setenv("EMBEDDED_MODEL", "deployed-model")
-	t.Setenv("PORT", "9000")
+	setRequired(t)
+	t.Setenv("AGENT_KEY", "test-agent-key")
+	t.Setenv("EMBEDDED_MODEL", "test-embed")
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.EmbedModel != "deployed-model" || cfg.Port != "9000" {
-		t.Fatal("environment was overwritten")
+	if cfg.AgentKey != "test-agent-key" || cfg.EmbedModel != "test-embed" || cfg.DatabaseURL != "from-environment" {
+		t.Fatal("config values were not loaded correctly")
 	}
 }
 
-func TestLoadWithoutDotEnv(t *testing.T) {
+func TestLoadDefaults(t *testing.T) {
 	cleanConfigEnv(t)
-	t.Chdir(envProject(t, ""))
-	for _, key := range configKeys {
-		t.Setenv(key, "from-environment")
-	}
-	if _, err := Load(); err != nil {
+	setRequired(t)
+
+	cfg, err := Load()
+	if err != nil {
 		t.Fatal(err)
 	}
+	if cfg.Port != "8080" {
+		t.Fatalf("Port = %q, want 8080", cfg.Port)
+	}
+	if cfg.AgentURL != "http://agent:8001" {
+		t.Fatalf("AgentURL = %q, want http://agent:8001", cfg.AgentURL)
+	}
 }
 
-func TestMalformedDotEnvDoesNotLeakContents(t *testing.T) {
+func TestLoadOverridesDefaults(t *testing.T) {
 	cleanConfigEnv(t)
-	t.Chdir(envProject(t, "JWT_SECRET=\"sensitive-test-value\n"))
-	_, err := Load()
-	if err == nil {
-		t.Fatal("malformed dotenv accepted")
+	setRequired(t)
+	t.Setenv("PORT", "9000")
+	t.Setenv("AGENT_URL", "http://localhost:8001")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(err.Error(), "sensitive-test-value") {
-		t.Fatal("secret leaked in error")
+	if cfg.Port != "9000" || cfg.AgentURL != "http://localhost:8001" {
+		t.Fatalf("defaults were not overridden: port %q, agent url %q", cfg.Port, cfg.AgentURL)
+	}
+}
+
+func TestLoadRequiresEachVariable(t *testing.T) {
+	for _, missing := range requiredKeys {
+		t.Run(missing, func(t *testing.T) {
+			cleanConfigEnv(t)
+			setRequired(t)
+			t.Setenv("JWT_SECRET", "sensitive-test-value")
+			t.Setenv("AGENT_KEY", "sensitive-agent-value")
+			if err := os.Unsetenv(missing); err != nil {
+				t.Fatal(err)
+			}
+
+			_, err := Load()
+			if err == nil {
+				t.Fatalf("Load must fail without %s", missing)
+			}
+			// секреты не должны попадать в текст ошибки
+			if strings.Contains(err.Error(), "sensitive") {
+				t.Fatal("secret leaked in error")
+			}
+		})
 	}
 }

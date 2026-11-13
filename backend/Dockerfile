@@ -15,7 +15,12 @@ COPY . .
 
 # Статический бинарь под Linux
 ENV CGO_ENABLED=0 GOOS=linux
-RUN go build -ldflags="-s -w" -o /out/migrate ./cmd/migrator
+# Каждый бинарь кладём в /out под коротким именем (migrate — исторически так в compose).
+# mcp-corporate пока не собираем: main.go пустой, сервис появится на этапе 7.
+RUN go build -ldflags="-s -w" -o /out/migrate ./cmd/migrator \
+    && go build -ldflags="-s -w" -o /out/ingest ./cmd/ingest \
+    && go build -ldflags="-s -w" -o /out/api ./cmd/api \
+    && go build -ldflags="-s -w" -o /out/mcp-buddy ./cmd/mcp-buddy
 
 # ---------- стадия запуска ----------
 FROM alpine:3.20
@@ -29,4 +34,5 @@ COPY --from=builder /out/ /app/
 
 USER app
 
+# Команда по умолчанию — миграции; остальные сервисы задают свою command в compose.
 CMD ["/app/migrate"]

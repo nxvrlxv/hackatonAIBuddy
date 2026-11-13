@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/mcpserver"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/rag"
 )
 
@@ -25,13 +26,27 @@ type SearchDocsOutput struct {
 	Message   string        `json:"message,omitempty"`
 }
 
-func RegisterSearchDocs(server *mcp.Server, svc *rag.ServiceRAG) {
+// DocSearcher — поиск по базе знаний (реализует rag.ServiceRAG).
+type DocSearcher interface {
+	Query(ctx context.Context, question string, teamID *int64) ([]rag.SearchResult, error)
+}
+
+func RegisterSearchDocs(server *mcp.Server, svc DocSearcher) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "search_docs",
-		Description: "Ищет во внутреннней базе знаний (онбординг, процессы, команды ) фрагменты по вопросу" +
-			"и возвращает их с источником. Если found=false — в документах ответа нет, не выдумывай.",
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchDocsOutput, error) {
-		results, err := svc.Query(ctx, in.Question, nil) // teamID — после JWT
+		Description: "Ищет во внутренней базе знаний (онбординг, процессы, команды) фрагменты по вопросу" +
+			" и возвращает их с источником. Если found=false — в документах ответа нет, не выдумывай.",
+	}, searchDocs(svc))
+}
+
+// searchDocs ищет с фильтром по команде пользователя из токена.
+func searchDocs(svc DocSearcher) mcp.ToolHandlerFor[SearchInput, SearchDocsOutput] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, SearchDocsOutput, error) {
+		claims, err := mcpserver.ClaimsFromRequest(req)
+		if err != nil {
+			return nil, SearchDocsOutput{}, err
+		}
+		results, err := svc.Query(ctx, in.Question, &claims.TeamID)
 		if err != nil {
 			return nil, SearchDocsOutput{}, err
 		}
@@ -47,5 +62,5 @@ func RegisterSearchDocs(server *mcp.Server, svc *rag.ServiceRAG) {
 			out.Message = "В базе знаний нет ответа на этот вопрос"
 		}
 		return nil, out, nil
-	})
+	}
 }
