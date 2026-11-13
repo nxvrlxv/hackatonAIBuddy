@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-buddy — проверка чата</title>
+<style>
+body{max-width:820px;margin:35px auto;padding:0 20px;font:17px/1.5 system-ui;background:#f5f7fa;color:#182536}
+textarea{width:100%;box-sizing:border-box;min-height:100px;padding:12px;font:inherit}
+button,select{padding:9px;margin:8px 6px 8px 0}pre{white-space:pre-wrap;background:white;padding:15px;border-radius:8px}
+#status{color:#526174}.hint{font-size:14px;color:#526174}
+</style>
+<h1>AI-buddy: проверка чата</h1>
+<p class="hint" id="hint"></p>
+<label>Пользователь <select id="user"></select></label>
+<label>Чат <select id="chat"></select></label><button id="new">Новый чат</button>
+<div id="history"></div>
+<form id="form"><textarea id="prompt" required maxlength="12000" placeholder="Например: какие ценности у Авито?"></textarea>
+<button id="send">Отправить</button><button type="button" id="stop" disabled>Остановить</button></form>
+<p id="status" role="status">Подключаюсь…</p><pre id="answer"></pre>
+<script>
+const config={{ demo_config | tojson }};
+const $=id=>document.getElementById(id);
+const real=config.mode==="go", base=real?config.public_go_url.replace(/\/$/,""):"", prefix=real?"/api":"/internal";
+let controller,busy=false,token="";
+const headers=()=>({"Content-Type":"application/json","Authorization":"Bearer "+token});
+function setBusy(value){
+ busy=value;
+ for(const id of ["send","user","chat","new"])$(id).disabled=value;
+ $("stop").disabled=!value || !controller;
+}
+async function api(path,options={}){
+ const r=await fetch(base+path,{...options,headers:headers()});
+ if(!r.ok)throw new Error("HTTP "+r.status+": "+await r.text());
+ return r.json();
+}
+function visibleText(m){
+ const content=real?m.content:m.payload?.content;
+ return typeof content==="string"?content:(Array.isArray(content)?content.filter(x=>x.type==="text").map(x=>x.text).join(""):"");
+}
+async function history(){
+ $("history").replaceChildren();
+ if(!$("chat").value)return;
+ const data=await api(prefix+"/conversations/"+$("chat").value+"/messages");
+ for(const m of data.messages){
+  if(!["user","assistant"].includes(m.role))continue;
+  const text=visibleText(m);if(!text)continue;
+  const p=document.createElement("pre");p.textContent=(m.role==="user"?"Вы":"AI-buddy")+": "+text;
+  $("history").append(p);
+ }
+}
+async function refreshChats(selected){
+ const data=await api(prefix+"/conversations");$("chat").replaceChildren();
+ for(const c of data.conversations)$("chat").add(new Option(c.title,c.id));
+ if(selected)$("chat").value=selected;
+ await history();
+}
+async function connect(){
+ if(busy)return;setBusy(true);token="";$("history").replaceChildren();$("answer").textContent="";
+ $("chat").replaceChildren();
+ try{
+  if(real){
+   const r=await fetch(base+"/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({login:$("user").value})});
+   if(!r.ok)throw new Error("Не удалось войти: HTTP "+r.status);
+   const data=await r.json();token=data.token;
+   $("status").textContent="Вход: "+data.user.full_name;
+  }else{token=$("user").value;$("status").textContent="Учебный режим";}
+  await refreshChats();
+ }catch(e){token="";$("status").textContent=e.message;}finally{setBusy(false);}
+}
+$("new").onclick=async()=>{
+ if(busy)return;
+ if(!token){$("status").textContent="Сначала выбери пользователя для входа";return;}
+ setBusy(true);
+ try{
+  const c=await api(prefix+"/conversations",{method:"POST",body:JSON.stringify({title:"Чат "+new Date().toLocaleTimeString()})});
+  await refreshChats(c.id);$("status").textContent="Чат создан";
+ }catch(e){$("status").textContent=e.message;}finally{setBusy(false);}
+};
+$("user").onchange=connect;
+$("chat").onchange=()=>history().catch(e=>$("status").textContent=e.message);
+$("stop").onclick=()=>controller?.abort();
+$("form").onsubmit=async e=>{
+ e.preventDefault();if(busy)return;
+ if(!token || !$("chat").value){$("status").textContent="Сначала войди и создай чат";return;}
+ controller=new AbortController();setBusy(true);
+ $("answer").textContent="";$("status").textContent="Проверяю пользователя…";
+ let terminal=false,succeeded=false,warnings=[];
+ function consume(frame){
+  const lines=frame.split("\n"),name=lines.find(x=>x.startsWith("event:"))?.slice(6).trim();
+  const raw=lines.filter(x=>x.startsWith("data:")).map(x=>x.slice(5).trimStart()).join("\n");if(!raw)return;
+  const data=JSON.parse(raw);
+  if(name==="status")$("status").textContent=data.text;
+  if(name==="message_start" && $("answer").textContent)$("answer").textContent+="\n";
+  if(name==="text_delta")$("answer").textContent+=data.text;
+  if(name==="warning")warnings.push(data.code);
+  if(name==="done"){terminal=true;succeeded=true;$("status").textContent="Готово"+(warnings.length?"; "+warnings.join(", "):"");}
+  if(name==="error"){terminal=true;$("status").textContent="Ошибка: "+data.code;}
+ }
+ try{
+  const r=await fetch(base+prefix+"/chat",{method:"POST",headers:headers(),signal:controller.signal,
+   body:JSON.stringify({conversation_id:Number($("chat").value),client_message_id:crypto.randomUUID(),content:$("prompt").value})});
+  if(!r.ok)throw new Error("HTTP "+r.status+": "+await r.text());
+  const reader=r.body.getReader(),decoder=new TextDecoder();let buffer="";
+  while(true){
+   const {value,done}=await reader.read();buffer+=done?decoder.decode():decoder.decode(value,{stream:true});
+   let match;while((match=/\r?\n\r?\n/.exec(buffer))!==null){consume(buffer.slice(0,match.index));buffer=buffer.slice(match.index+match[0].length);}
+   if(done)break;
+  }
+  if(!terminal)throw new Error("Поток оборвался до завершения");
+  if(succeeded){await history();$("answer").textContent="";$("prompt").value="";}
+ }catch(error){$("status").textContent=error.name==="AbortError"?"Остановлено; частичный ответ может быть сохранён":error.message;}
+ finally{controller=null;setBusy(false);}
+};
+const users=real?[["sasha.intern","Саша · Путешествия"],["maria.intern","Мария · Доставка"],["petya.intern","Пётр · Объявления"],["olga.intern","Ольга · Платежи"]]:[["demo-alice","Аня"],["demo-bob","Борис"]];
+for(const [value,label] of users)$("user").add(new Option(label,value));
+$("hint").textContent=real
+ ?"Проверка настоящего API: "+base+". Вход по тестовым учёткам, сообщения сохраняются в PostgreSQL."
+ :"Учебный режим: пользователи и хранилище в памяти. Ответы генерирует настоящая Ollama.";
+if(!config.history_search_enabled)$("hint").textContent+=" Поиск по прошлым чатам отключён.";
+if(!config.summary_enabled)$("hint").textContent+=" В контексте сохраняются последние ходы без резюме.";
+connect();
+</script></html>

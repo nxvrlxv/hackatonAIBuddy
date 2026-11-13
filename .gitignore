@@ -3,3 +3,4 @@ bin/
 coverage.out
 node_modules/
 .DS_Store
+backend/cover.out

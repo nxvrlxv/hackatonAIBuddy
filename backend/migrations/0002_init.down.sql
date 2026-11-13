@@ -1,6 +1,6 @@
--- 000002_knowledge_base.down.sql
+-- Drop dependent chunks before their documents.
 BEGIN;
 DROP TABLE IF EXISTS buddy.chunks;
 DROP TABLE IF EXISTS buddy.documents;
-DROP EXTENSION IF EXISTS vector;
+-- The vector extension is shared infrastructure and is retained.
 COMMIT;

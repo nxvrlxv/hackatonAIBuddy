@@ -1,1 +1,201 @@
-services: {}
+# Общие настройки Go-сервисов: один образ, переменные из .env.
+# DATABASE_URL и адреса соседей задаются здесь — внутри сети compose обращаемся по именам сервисов.
+x-backend: &backend
+  build: ./backend
+  image: ai-buddy-backend
+  env_file:
+    - .env
+  # Для необязательной внешней Ollama на хосте.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+  OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+
+services:
+  # Сервер моделей. Модели хранятся отдельно от жизненного цикла контейнера.
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS:-1}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH:-8192}
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  ollama-models:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    environment:
+      OLLAMA_HOST: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+      EMBEDDED_MODEL: ${EMBEDDED_MODEL:-qwen3-embedding:0.6b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        ollama pull "$$EMBEDDED_MODEL"
+        ollama pull "$$OLLAMA_MODEL"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Одноразовый: применяет миграции и выходит.
+  migrator:
+    <<: *backend
+    command: ["/app/migrate"]
+    environment:
+      <<: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # Одноразовый: индексирует data/knowledge в pgvector. Ожидает загрузки моделей в Ollama.
+  # Остальные сервисы его не ждут: упавшая индексация не должна ронять стенд.
+  ingest:
+    <<: *backend
+    command: ["/app/ingest", "-iv", "${INDEX_VERSION:-v1}"]
+    environment:
+      <<: *backend-env
+      KNOWLEDGE_PATH: /data/knowledge
+    volumes:
+      - ./data/knowledge:/data/knowledge:ro
+    depends_on:
+      ollama-models:
+        condition: service_completed_successfully
+      migrator:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    <<: *backend
+    command: ["/app/api"]
+    environment:
+      <<: *backend-env
+      PORT: "8080"
+      AGENT_URL: http://agent:8001
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  mcp-buddy:
+    <<: *backend
+    command: ["/app/mcp-buddy"]
+    environment:
+      <<: *backend-env
+      PORT: "8090"
+    ports:
+      - "8090:8090"
+    depends_on:
+      ollama-models:
+        condition: service_completed_successfully
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # TODO(этап 7): mcp-corporate:8091 — main.go пока пустой, бинарь не собирается.
+  # mcp-corporate:
+  #   <<: *backend
+  #   command: ["/app/mcp-corporate"]
+  #   environment:
+  #     <<: *backend-env
+  #     PORT: "8091"
+  #   ports:
+  #     - "8091:8091"
+  #   depends_on:
+  #     migrator:
+  #       condition: service_completed_successfully
+  #   restart: unless-stopped
+
+  agent:
+    build: ./agent
+    image: ai-buddy-agent
+    env_file:
+      - .env
+      - path: ./agent/.env
+        required: false
+    environment:
+      AGENT_MODE: go
+      AGENT_SERVICE_TOKEN: ${AGENT_KEY}
+      GO_API_URL: http://api:8080
+      MCP_URL: http://mcp-buddy:8090/mcp
+      OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+    ports:
+      - "8001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      ollama-models:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+      mcp-buddy:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 35s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # TODO: фронтенд — раскомментировать, когда в ./frontend появятся package.json и Dockerfile.
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:80"
+  #   depends_on:
+  #     api:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+volumes:
+  pg_data:
+  ollama_data:
