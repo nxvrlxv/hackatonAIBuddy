@@ -1,5 +1,7 @@
 """Профиль всегда добавляется заново; сокращается только история/поисковые материалы."""
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from langchain_core.messages import SystemMessage
 from chat.models import AgentError, Summary
 
@@ -31,6 +33,22 @@ def build_input(user, summary, history, active, memories, history_search_enabled
         prompt = prompt.replace(
             "Для вопроса о предыдущих обсуждениях используй search_history при необходимости.",
             "Поиск по другим чатам отключён. Используй только предоставленную историю.")
+    prompt += (
+        "\nОформление отгула: сначала get_request_types; уточни недостающие даты. "
+        "Для одного дня start_date=end_date. Не выдумывай даты и причину. "
+        "Для неоднозначных дат уточни год/период. Сегодня по Москве: "
+        + datetime.now(ZoneInfo("Europe/Moscow")).date().isoformat()
+        + ". На вопрос как оформить только объясняй; создавай через create_time_off_request "
+        "только по явной просьбе оформить и при известных датах. Если пользователь дал даты, "
+        "после get_request_types сразу вызывай create_time_off_request. Не ищи подтверждение "
+        "или разрешение в списке заявок: это история, а не условие создания новой заявки. "
+        "Даты других заявок не делают выбранную пользователем дату неверной. "
+        "Отдельный апрув пока не требуется. "
+        "Об успехе говори только после результата инструмента с id и status. "
+        "submitted = заявка подана, но НЕ согласована. При ошибке сообщи её смысл; "
+        "при неизвестном исходе проверь list_my_requests перед повтором. "
+        "Не обещай уведомление наставника: отправки уведомлений пока нет."
+    )
     messages = [
         SystemMessage(content=prompt),
         SystemMessage(content="Проверенный профиль пользователя (JSON):\n" + user.model_dump_json()),

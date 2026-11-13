@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/absences"
 	"log"
 	"os"
 	"os/signal"
@@ -60,6 +61,7 @@ func run() error {
 	RegisterServerTools(server)
 	RegisterSearchDocs(server, svc)
 	RegisterWhoAmI(server, repo)
+	absences.Register(server, absences.New(pool))
 
 	return mcpserver.Run(ctx, mcpserver.Options{
 		Addr:            ":" + cfg.Port,

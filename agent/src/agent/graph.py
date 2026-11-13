@@ -37,7 +37,30 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         """Найти прошлые разговоры этого пользователя с датами/диапазонами источников."""
         return json.dumps([m.model_dump() for m in memory.search(query)], ensure_ascii=False)[:6000]
 
+    @tool
+    def get_request_types() -> str:
+        """Получить типы заявок и обязательные поля перед оформлением отгула."""
+        return json.dumps(gateway.call("get_request_types", {}, token), ensure_ascii=False)
+
+    @tool
+    def list_my_requests() -> str:
+        """Получить свои заявки и статусы. submitted означает подана, а не согласована."""
+        return json.dumps(gateway.call("list_my_requests", {}, token), ensure_ascii=False)
+
+    @tool
+    def create_time_off_request(start_date: str, end_date: str, reason: str = "") -> str:
+        """Создать отгул по явной просьбе оформить. Даты YYYY-MM-DD включительно.
+        Не вызывай для справочного вопроса или пока даты не уточнены. Причина необязательна.
+        """
+        # One mutation per turn; identity and retry key are never chosen by the model.
+        return json.dumps(gateway.call("create_time_off_request", {
+            "start_date": start_date, "end_date": end_date, "reason": reason,
+            "idempotency_key": "time-off:" + turn.run_id,
+        }, token), ensure_ascii=False)
+
     tools = [search_docs]
+    if settings.mode == "go":
+        tools.extend([get_request_types, list_my_requests, create_time_off_request])
     if settings.history_search_enabled:
         tools.append(search_history)
     by_name = {t.name: t for t in tools}

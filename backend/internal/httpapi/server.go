@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/absences"
 	"net/http"
 
 	"github.com/nxvrlxv/ai-buddy/backend/internal/auth"
@@ -19,6 +20,7 @@ type TokenManager interface {
 }
 
 type Server struct {
+	Requests *absences.Service
 	users    UserStorage
 	tokens   TokenManager
 	chat     ChatService  // чаты и история (chat.Service)
@@ -58,6 +60,9 @@ func (s *Server) Handler() http.Handler {
 		return s.requireAgentKey(s.requireAuth(h))
 	})
 
+	if s.Requests != nil {
+		s.Requests.RegisterHTTP(mux, s.requireAuth)
+	}
 	return cors(mux)
 }
 

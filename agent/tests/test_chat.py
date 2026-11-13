@@ -106,7 +106,7 @@ class AgentTests(unittest.TestCase):
             def on_chat_model_start(self, serialized, messages, **kwargs):
                 seen.append(messages[0])
         service = self.app.extensions["chat_service"]
-        service.settings = replace(service.settings, context_tokens=9500)
+        service.settings = replace(service.settings, context_tokens=11000)
         service.model = TextModel(responses=["Ответ"], callbacks=[Capture()])
         # Первый запрос помещается, второй требует сжатия предыдущего хода.
         self.assertEqual(events(self.send("Git " + "a" * 2000))[-1][0], "done")
@@ -126,6 +126,23 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(store.search("GitLab"))
         bob = self.app.extensions["demo_backend"].bind(gateway.whoami("demo-bob"), "")
         self.assertEqual(bob.search("GitLab"), [])
+
+    def test_time_off_identity_and_key_are_supplied_by_code(self):
+        service = self.app.extensions["chat_service"]
+        service.settings = replace(service.settings, mode="go")
+        self.gateway.call = Mock(return_value={"id": 42, "status": "submitted"})
+        service.model = ToolModel(responses=[
+            AIMessage(content="", tool_calls=[{"id": "leave1", "name": "create_time_off_request",
+                "args": {"start_date": "2099-01-20", "end_date": "2099-01-20"}}]),
+            AIMessage(content="Заявка №42 подана, ещё не согласована."),
+        ])
+        self.assertEqual(events(self.send("Оформи отгул на 20 января 2099"))[-1][0], "done")
+        name, args, token = self.gateway.call.call_args.args
+        self.assertEqual(name, "create_time_off_request")
+        self.assertEqual(token, "demo-alice")
+        self.assertNotIn("user_id", args)
+        self.assertTrue(args["idempotency_key"].startswith("time-off:"))
+        self.assertEqual(args["reason"], "")
 
     def test_tool_cycle_saved_with_call_id(self):
         self.app.extensions["chat_service"].model = ToolModel(responses=[
@@ -204,7 +221,7 @@ class AgentTests(unittest.TestCase):
 
     def test_summary_text_is_not_streamed(self):
         service = self.app.extensions["chat_service"]
-        service.settings = replace(service.settings, context_tokens=9500)
+        service.settings = replace(service.settings, context_tokens=11000)
         service.summary_model = TextModel(responses=["HIDDEN-SUMMARY"])
         self.send("a"*2000)
         response = self.send("b"*2200)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/absences"
 	"log"
 	"net/http"
 	"net/url"
@@ -62,9 +63,11 @@ func run() error {
 
 	chats := chat.NewService(repo, historyLimit)
 
+	api := httpapi.New(repo, tokens, chats, agent, cfg.AgentKey)
+	api.Requests = absences.New(pool)
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.New(repo, tokens, chats, agent, cfg.AgentKey).Handler(),
+		Handler:           api.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		// WriteTimeout не ставим: /api/chat отдаёт длинный SSE-поток
 	}

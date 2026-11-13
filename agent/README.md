@@ -154,3 +154,7 @@ python tests/smoke_compose.py
 Откройте http://localhost:8001/demo. В go-режиме HTML использует публичный Go API,
 тестовые логины и настоящую БД. PUBLIC_GO_API_URL задаёт адрес Go для браузера.
 [Проверка чата и RAG](../docs/rag-testing.md): индексация, вопросы и SQL-проверки.
+
+## Заявки на отгул
+
+В go-режиме доступны создание и просмотр заявок через MCP. Контракт, ограничения и тестирование: [docs/time-off.md](../docs/time-off.md).
