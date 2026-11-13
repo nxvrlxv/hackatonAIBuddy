@@ -1,88 +1,83 @@
-import { useLayoutEffect, useState, type ReactNode } from 'react'
+import type { ReactNode, SVGProps } from 'react'
 
 /**
- * Холст с размерами исходного макета. Все блоки внутри стоят в тех же координатах,
- * что и в исходнике, а холст целиком масштабируется под окно.
+ * Иконки лежат отдельными файлами в /public/icons (экспорт из макета).
+ * Красим их через CSS-маску: цвет задаётся currentColor, сами SVG остаются как есть —
+ * в них зашиты разные цвета заливок, которые для тёмных кнопок не подходят.
  */
-// Отладка: ?ov=1 накладывает исходник (режим разницы) для сверки координат.
-const REF: Record<string, { src: string; x: number; y: number; k: number }> = {
-  login: { src: '/ref/p1.png', x: 0, y: 0, k: 1 },
-  main: { src: '/ref/p3.png', x: 0, y: 0, k: 1 },
-  chat: { src: '/ref/p2.png', x: -12.85, y: 25.25, k: 1.15 },
+const SRC: Record<string, string> = {
+  mail: '01-email',
+  home: '02-home',
+  chatOutline: '03-chat-outline-purple',
+  user: '04-user-white',
+  service: '05-service-square-blue',
+  clock: '06-clock-red',
+  info: '07-info',
+  send: '08-send-paper-plane-white',
+  users: '09-users-white',
+  laptop: '10-laptop-white',
+  settings: '11-settings-white',
+  calendarWhite: '12-hr-calendar-white',
+  arrowUpRight: '13-arrow-up-right-white',
+  check: '14-check-green',
+  progress: '15-progress-yellow',
+  play: '16-play-dark',
+  chevronRight: '17-chevron-right',
+  chevronDown: '18-chevron-down',
+  chatSolid: '19-chat-solid-white',
+  calendarBlue: '20-hr-calendar-blue',
 }
-const qs = new URLSearchParams(location.search)
-const ovMode = qs.get('ov')
-const fixed = qs.has('fixed') // отладка: масштаб 1, холст в левом верхнем углу
 
-// Масштаб у всех экранов считается от кадра главной (1086 × 600), чтобы при переходах ничего не прыгало.
-const FIT_W = 1086
-const FIT_H = 600
+export type IconName = keyof typeof SRC
 
-export function Stage({ w, h, children, refKey, center }: { w: number; h: number; children: ReactNode; refKey?: string; center?: boolean }) {
-  const [zoom, setZoom] = useState(1)
-  const [height, setHeight] = useState(h)
-  useLayoutEffect(() => {
-    const fit = () => {
-      const z = fixed ? 1 : Math.min(window.innerWidth / FIT_W, window.innerHeight / FIT_H)
-      setZoom(z)
-      // по высоте холст дотягивается до низа окна: боковая панель и чат растягиваются, как в исходнике
-      setHeight(fixed || center ? h : Math.max(h, Math.floor(window.innerHeight / z)))
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
-  }, [w, h])
+export function Icon({ name, size = 18, ...rest }: { name: IconName; size?: number } & Omit<SVGProps<HTMLSpanElement>, 'name'>) {
+  const url = `url("/icons/${SRC[name]}.svg")`
   return (
-    <div className="viewport" style={fixed ? { placeItems: 'start' } : center ? { placeItems: 'center' } : undefined}>
-      <div className="stage" style={{ width: w, height, zoom }}>
-        {children}
-        {ovMode && refKey && (
-          <img
-            src={REF[refKey].src}
-            alt=""
-            style={{
-              position: 'absolute', left: REF[refKey].x, top: REF[refKey].y, transformOrigin: '0 0',
-              transform: `scale(${REF[refKey].k})`, pointerEvents: 'none', zIndex: 50,
-              mixBlendMode: ovMode === 'diff' ? 'difference' : 'normal', opacity: ovMode === 'diff' ? 1 : Number(ovMode) || 0.5,
-              inset: 'auto',
-            }}
-          />
-        )}
-      </div>
-    </div>
+    <span
+      aria-hidden="true"
+      {...rest}
+      style={{
+        display: 'inline-block',
+        flex: 'none',
+        width: size,
+        height: size,
+        backgroundColor: 'currentColor',
+        maskImage: url,
+        WebkitMaskImage: url,
+        maskSize: 'contain',
+        WebkitMaskSize: 'contain',
+        maskRepeat: 'no-repeat',
+        WebkitMaskRepeat: 'no-repeat',
+        maskPosition: 'center',
+        WebkitMaskPosition: 'center',
+        ...rest.style,
+      }}
+    />
   )
 }
 
-/** Логотип Avito: четыре круга и надпись. */
-/** Знак Avito: пропорции и цвета по официальному логотипу. */
-export function AvitoMark({ size = 29 }: { size?: number }) {
-  return (
-    <svg width={size} height={size * 27 / 29} viewBox="0 0 29 27" aria-hidden="true">
-      <circle cx="10.35" cy="5.12" r="3.25" fill="#965EEB" />
-      <circle cx="21.68" cy="7.04" r="7.04" fill="#00AAFF" />
-      <circle cx="8.69" cy="18.16" r="8.69" fill="#04E061" />
-      <circle cx="23.72" cy="20.47" r="5.23" fill="#FF4053" />
-    </svg>
-  )
+/** Знак Avito — четыре круга, файл из img. */
+export function AvitoMark({ size = 28 }: { size?: number }) {
+  return <img src="/icons/avito-mark.svg" width={size} height={size * (470 / 570)} alt="" aria-hidden="true" />
 }
 
-export function Logo({ size = 29, text = 25 }: { size?: number; text?: number }) {
-  return (
-    <div className="logo">
-      <AvitoMark size={size} />
-      <span style={{ fontSize: text }}>Avito</span>
-    </div>
-  )
+/** Полный логотип Avito (картинка из img). */
+export function Logo({ height = 26 }: { height?: number }) {
+  return <img className="logo-img" src="/img/avito-logo.png" height={height} alt="Avito" style={{ height }} />
 }
 
-/** Круглая иконка-аватар пользователя (фиолетовый круг, белый силуэт). */
-export function UserAvatar({ size }: { size: number }) {
+export function Mascot({ variant, alt = '', className, style }: { variant: 'wave' | 'cheeks' | 'avatar'; alt?: string; className?: string; style?: React.CSSProperties }) {
+  return <img className={className} src={`/img/buddy-${variant}.png`} alt={alt} style={style} draggable={false} />
+}
+
+export function Avatar({ size = 34 }: { size?: number }) {
   return (
-    <span className="user-avatar" style={{ width: size, height: size }} aria-hidden="true">
-      <svg viewBox="0 0 24 24" width={size * 0.56} height={size * 0.56}>
-        <circle cx="12" cy="7.6" r="4.6" fill="#fff" />
-        <path d="M3.6 21.2c.6-4.5 4.1-7.4 8.4-7.4s7.8 2.9 8.4 7.4c.1.5-.3.8-.7.8H4.3c-.4 0-.8-.3-.7-.8Z" fill="#fff" />
-      </svg>
+    <span className="avatar" style={{ width: size, height: size }} aria-hidden="true">
+      <Icon name="user" size={size * 0.56} />
     </span>
   )
+}
+
+export function Icon3d({ tone, children }: { tone: 'green' | 'blue' | 'pink' | 'violet'; children: ReactNode }) {
+  return <span className={`ico ico-${tone}`}>{children}</span>
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 570 470" width="570" height="470">
+  <title>Four-color dot logo</title>
+  <g>
+    <circle cx="190" cy="100" r="69" fill="#9632FC"/>
+    <circle cx="390" cy="110" r="110" fill="#02A4FB"/>
+    <circle cx="180" cy="290" r="120" fill="#03DE3C"/>
+    <circle cx="400" cy="290" r="91" fill="#FC2940"/>
+  </g>
+</svg>
