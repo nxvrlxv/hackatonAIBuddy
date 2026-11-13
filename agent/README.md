@@ -4,7 +4,7 @@ Go отвечает за авторизацию, PostgreSQL, MCP и публич
 Python собирает контекст, вызывает LLM/инструменты и отдаёт SSE через Go.
 
 Интеграция согласована с origin/feature/mcps_archi (a035415).
-[BACKEND_CONTRACT.md](BACKEND_CONTRACT.md) описывает действующий контракт.
+Запуск описан в [docker-compose.md](../docs/docker-compose.md), API заявок — в [time-off.md](../docs/time-off.md).
 
 ## Запуск
 
