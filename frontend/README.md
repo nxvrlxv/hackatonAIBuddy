@@ -18,7 +18,9 @@ npm run dev:mock   # без бэкенда: данные и ответ Buddy и�
 
 Откроется http://localhost:5173. Бэкенд поднимается из корня репозитория: `docker compose up --build -d api mcp-buddy agent` (подробно в `docs/docker-compose.md`). «Войти через Avito ID» входит тестовой учёткой `sasha.intern` без пароля (имитация SSO, другая учётка задаётся `VITE_DEMO_LOGIN`). «Войти по email» принимает любой тестовый логин, например `anna_mentor`; список в корневом README. Переменные в `.env.example`.
 
-Сборка: `npm run build`, результат в `dist/`. Проверка типов — `npx tsc -b`, линт — `npm run lint`, тесты — `npm test`. Покрытие по всем файлам `src`: `npx vitest run --coverage --coverage.include='src/**/*.{ts,tsx}'` (без `--coverage.include` учитываются только файлы, которые загрузили тесты).
+Сборка: `npm run build`, результат в `dist/`. Проверка типов — `npx tsc -b`, линт — `npm run lint`, тесты — `npm test`. Покрытие — `npm run coverage`: считается по всем файлам `src` (настройка `coverage.include` в `vite.config.ts`), HTML-отчёт в `coverage/index.html`.
+
+Тесты лежат рядом с кодом: `src/api/*.test.ts` проверяют сеть и поток SSE в окружении node, `src/*.test.tsx` проверяют экраны в jsdom через Testing Library (строка `// @vitest-environment jsdom` в начале файла). Сеть в тестах экранов подменяется заглушками `src/api/client.ts`.
 
 ## Устройство
 

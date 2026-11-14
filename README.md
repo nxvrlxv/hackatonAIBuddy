@@ -217,10 +217,10 @@ Buddy отвечает на вопросы о компании и процесс
 |---|---|---|---|
 | Бэкенд (Go) | `make cover` (или `cd backend && go test ./... -coverprofile=cover.out && go tool cover -func=cover.out \| tail -1`) | | заполняется после прогона |
 | Агент (Python) | `cd agent && uv run --with pytest --with pytest-cov pytest --cov=src --cov-report=term tests/` | 50 пройдено | 87% |
-| Интерфейс (TypeScript) | `cd frontend && npm ci && npx vitest run --coverage --coverage.include='src/**/*.{ts,tsx}'` | 53 пройдено | 41% |
+| Интерфейс (TypeScript) | `cd frontend && npm ci && npm run coverage` | 105 пройдено | 99% |
 
-Цифры агента и интерфейса сняты 14.11 на коммите `2885d5e`.
-- Интерфейс считается по всем файлам `src`, включая экраны. Без `--coverage.include` Vitest учитывает только файлы, которые загрузили тесты, и цифра получается завышенной.
+Цифры сняты 14.11: агент на коммите `2885d5e`, интерфейс с тестами экранов из ветки `test/frontend-components`.
+- Интерфейс считается по всем файлам `src`, включая экраны (`coverage.include` в `frontend/vite.config.ts`). Тесты экранов работают в jsdom с заглушкой сети, бэкенд для них не нужен. HTML-отчёт: `frontend/coverage/index.html`.
 - Интеграционные тесты хранилища чатов (`backend/internal/postgres/buddy/chat_integration_test.go`) запускаются с переменной `DATABASE_URL` и применёнными миграциями, без неё пропускаются.
 
 Без локального Go тесты бэкенда можно запустить в контейнере:
