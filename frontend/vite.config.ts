@@ -16,7 +16,14 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
+      // тесты API — в node; тесты экранов включают jsdom строкой `// @vitest-environment jsdom`
       environment: 'node',
+      coverage: {
+        // считаем по всем файлам src, а не только по загруженным тестами: иначе процент завышен
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: ['src/**/*.test.{ts,tsx}'],
+        reporter: ['text', 'html', 'json-summary'],
+      },
     },
   }
 })
