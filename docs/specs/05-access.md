@@ -1,7 +1,7 @@
 # 05. Авторизация и права
 
 Код: `backend/internal/auth/`, `backend/internal/httpapi/middleware.go`, `backend/internal/httpapi/proxy.go`, `backend/internal/mcpserver/auth.go`, `agent/src/api/routers.py`, `agent/src/clients/mcp.py`.
-Тесты: `backend/internal/auth/*_test.go`, `backend/internal/httpapi/middleware_test.go`, `backend/internal/httpapi/proxy_test.go`, `backend/internal/httpapi/conversations_test.go`, `backend/internal/mcpserver/auth_test.go`, `agent/tests/test_chat.py`.
+Тесты: `backend/internal/auth/*_test.go`, `backend/internal/httpapi/middleware_test.go`, `backend/internal/httpapi/proxy_test.go`, `backend/internal/httpapi/conversations_test.go`, `backend/internal/onboarding/http_test.go`, `backend/internal/mcpserver/auth_test.go`, `agent/tests/test_chat.py`.
 
 ## Цель
 
@@ -50,11 +50,22 @@ AI-buddy учитывает права пользователя: недосту�
 | Данные | Ограничение |
 |---|---|
 | Чаты и сообщения | только свои; чужой чат даёт 404 |
-| Чек-лист | только свои задачи; чужая задача даёт «не найдена» |
+| Чек-лист | только свои задачи; чужая задача даёт «не найдена»; поставить `done` себе нельзя |
+| Запросы на проверку и прогресс стажёров | только у роли `mentor` (остальным 403) и только по своим стажёрам (`mentor_id`); чужая задача даёт 404 |
 | Заявки | только свои |
 | База знаний | общие документы и документы своей команды |
 | Команда | только своя, только имя и роль |
 | Служебные сообщения | вызовы инструментов и ответы `tool` в интерфейс не отдаются |
+
+## Роли
+
+| Роль | Что доступно сверх общего |
+|---|---|
+| `intern` | свой чек-лист: отправить задачу на проверку, отметить «в работе» |
+| `mentor` | очередь проверки своих стажёров, принять или отклонить задачу, прогресс своих стажёров |
+| `lead` | только общее: профиль, команда, база знаний, чат, заявки |
+
+Роль берётся из токена. Ручки наставника сначала проверяют роль, затем SQL-условие `mentor_id = id наставника`, поэтому наставник другой команды или руководитель чужую задачу не примет. Агент принять или отклонить задачу не может: такого инструмента нет.
 
 ## Защита от инъекций
 
@@ -69,6 +80,7 @@ AI-buddy учитывает права пользователя: недосту�
 | Неизвестный логин | 401 `invalid login` |
 | Неверный ключ агента на `/internal/agent/*` | 401 `invalid agent key` |
 | Неверный ключ агента на агенте | 403 `service_unauthorized` |
+| Ручка наставника вызвана другой ролью | 403 `forbidden` |
 | Агент недоступен | 502 `agent unavailable`; в лог пишутся метод, путь и ошибка без заголовков |
 
 ## Критерии приёмки
@@ -84,9 +96,11 @@ AI-buddy учитывает права пользователя: недосту�
 | MCP-сервер отклоняет запрос без верного токена | `mcpserver/auth_test.go::TestVerifierInvalidToken`, `TestRequireBearerTokenIntegration` |
 | Чужой чат недоступен на уровне базы | `postgres/buddy/chat_integration_test.go::TestChatIntegrationForeignUser` |
 | Агент проверяет ключ до `whoami` | `agent/tests/test_chat.py::test_go_requires_service_credential_before_whoami` |
+| Ручки наставника дают 403 другим ролям и не обращаются к базе | `onboarding/http_test.go::TestReviewActionsHTTP`, `TestListInternsHTTP` |
+| Наставник принимает и отклоняет только задачи своих стажёров | `onboarding/postgres_test.go::TestApproveReject` |
 
 ## Вне рамок
 
 - Пароли и настоящий SSO: в Авито они уже есть, прототип только имитирует вход.
 - Отзыв токенов до истечения срока.
-- Отдельные права наставника на данные стажёров.
+- Права руководителя на данные всей команды: сейчас у роли `lead` нет дополнительных прав.

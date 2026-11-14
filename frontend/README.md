@@ -1,12 +1,14 @@
 # AI Buddy: фронтенд
 
-Интерфейс стажёра: вход, «Главная» и «AI-чат». Вход, профиль и чат работают через Go API (`backend/cmd/api`), онбординг и контакты пока из заглушки `src/api/mock.ts`.
+Интерфейс стажёра и наставника: вход, «Главная» и «AI-чат». Все данные идут из Go API (`backend/cmd/api`): вход, профиль, чек-лист, команда, проверка задач наставником и чат. Заглушка `src/api/mock.ts` нужна только для режима `mock`.
 
-Стек: React 19, TypeScript, Vite 8, шрифт Inter (`@fontsource-variable/inter`).
+Стек: React 19, TypeScript, Vite 8, react-markdown, шрифт Inter (`@fontsource-variable/inter`).
 
 ## Запуск
 
-Нужен Node.js 20+.
+В составе стенда интерфейс поднимается из корня репозитория командой `docker compose up --build` и открывается на http://localhost:3000. Образ собирается в `node:25-alpine`, nginx раздаёт сборку и проксирует `/api` на Go API без буферизации (`Dockerfile`, `nginx.conf`).
+
+Для разработки нужен Node.js 20+.
 
 ```bash
 npm install
@@ -14,18 +16,21 @@ npm run dev        # с настоящим бэкендом: /api проксир
 npm run dev:mock   # без бэкенда: данные и ответ Buddy из заглушек
 ```
 
-Откроется http://localhost:5173. Бэкенд поднимается из корня репозитория: `docker compose up --build -d api mcp-buddy agent` (подробно в `docs/docker-compose.md`). Вход по кнопкам «Войти через Avito ID» и «Войти по email» — тестовая учётка `sasha.intern` без пароля (имитация SSO, как в Go API); другая учётка — через `VITE_DEMO_LOGIN`. Переменные — в `.env.example`.
+Откроется http://localhost:5173. Бэкенд поднимается из корня репозитория: `docker compose up --build -d api mcp-buddy agent` (подробно в `docs/docker-compose.md`). «Войти через Avito ID» входит тестовой учёткой `sasha.intern` без пароля (имитация SSO, другая учётка задаётся `VITE_DEMO_LOGIN`). «Войти по email» принимает любой тестовый логин, например `anna_mentor`; список в корневом README. Переменные в `.env.example`.
 
-Сборка: `npm run build`, результат в `dist/`. Проверка типов — `npx tsc -b`, линт — `npm run lint`, тесты — `npm test`, покрытие — `npm run coverage`.
+Сборка: `npm run build`, результат в `dist/`. Проверка типов — `npx tsc -b`, линт — `npm run lint`, тесты — `npm test`. Покрытие по всем файлам `src`: `npx vitest run --coverage --coverage.include='src/**/*.{ts,tsx}'` (без `--coverage.include` учитываются только файлы, которые загрузили тесты).
 
 ## Устройство
 
 - `src/App.tsx`: переключение экранов (вход → главная ↔ чат).
 - `src/Login.tsx`, `src/Home.tsx`, `src/Chat.tsx`: экраны.
-- `src/Shell.tsx`: боковая панель и вкладки.
+- `src/Reviews.tsx`, `src/Interns.tsx`: «Запросы на проверку» и «Мои стажёры» на главной наставника.
+- `src/Help.tsx`: окно «Что умеет Buddy» с примерами вопросов.
+- `src/Markdown.tsx`: разметка ответов Buddy (сырой HTML не исполняется).
+- `src/Shell.tsx`: боковая панель, вкладки и меню пользователя.
 - `src/ui.tsx`: иконки, логотип, аватар, маскот.
 - `src/index.css`: токены, размеры, цвета, анимации и адаптив.
-- `src/api/client.ts`: **единственное место, где есть сеть**: вход, профиль, история чата и потоковый ответ Buddy (SSE). Режим `mock` отвечает без сети.
+- `src/api/client.ts`: **единственное место, где есть сеть**: вход, главная, проверка задач, история чата и потоковый ответ Buddy (SSE). Режим `mock` отвечает без сети.
 - `src/api/sse.ts`: разбор потока Server-Sent Events.
 - `src/api/types.ts`: контракты (`User`, `ChatMessage`, `HomeData`, …).
 - `public/icons/`: SVG-иконки из макета (`01-email.svg` … `20-hr-calendar-blue.svg`, `avito-mark.svg`).
@@ -47,13 +52,20 @@ npm run dev:mock   # без бэкенда: данные и ответ Buddy и�
 | `fetchMe()` | `GET /api/me` |
 | `fetchHistory()` | `GET /api/conversations`, затем `GET /api/conversations/{id}/messages` последнего чата |
 | `sendMessage(text)` | `POST /api/conversations` (если чата ещё нет), затем `POST /api/chat` — поток SSE |
-| `fetchHome()` | пока заглушка: у бэкенда нет ручек онбординга и контактов |
+| `fetchHome()` | `GET /api/me`, `GET /api/checklist`, `GET /api/team` параллельно |
+| `submitForReview(id)` | `PATCH /api/checklist/tasks/{id}` `{status: "review"}` |
+| `fetchReviews()` | `GET /api/reviews` (наставник) |
+| `approveTask(id)`, `rejectTask(id, comment)` | `POST /api/reviews/{id}/approve`, `POST /api/reviews/{id}/reject` `{comment}` |
+| `fetchInterns()` | `GET /api/interns` (наставник) |
 
 Токен хранится в `sessionStorage` и уходит в заголовке `Authorization: Bearer`. Ответ 401 возвращает на экран входа.
 
-Поток `/api/chat`: `status` показывается в шапке чата, `text_delta` печатается в пузыре по мере прихода, `done` завершает ответ. При событии `error`, обрыве потока или тишине дольше 30 секунд под вопросом появляется ошибка с кнопкой «Повторить»; интерфейс при этом не блокируется. «Начать заново» открывает новый чат на бэкенде.
+Поток `/api/chat`: `status` показывается в шапке чата, `text_delta` печатается в пузыре по мере прихода, `done` завершает ответ. При событии `error`, обрыве потока или тишине дольше 180 секунд (`IDLE_TIMEOUT_MS`) под вопросом появляется ошибка с кнопкой «Повторить»; интерфейс при этом не блокируется. Порог большой: пока модель на CPU решает, вызвать ли инструмент, событий нет до 2,5 минуты. «Начать заново» открывает новый чат на бэкенде.
+
+Статусы задач и правила проверки наставником описаны в `docs/approvals-contract.md` и `docs/specs/02-onboarding.md`.
 
 ## Отладка
 
 - `?s=main` или `?s=chat` открывает нужную вкладку после входа (в режиме `mock` — сразу).
+- В режиме `mock` роль задаётся адресом: `?as=mentor` — наставник с запросами на проверку, `?as=lead` — руководитель.
 - Исходные кадры макета лежат в `public/ref/` (`p1`–`p3`) для сверки глазами.

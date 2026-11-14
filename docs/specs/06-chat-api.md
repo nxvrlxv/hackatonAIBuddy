@@ -9,7 +9,7 @@
 
 ## Ручки для интерфейса
 
-Базовый адрес `http://localhost:8080`. Все ручки, кроме входа и `/healthz`, требуют `Authorization: Bearer <JWT>`. Ответы в JSON, ошибки в виде `{"error": "..."}`. CORS разрешает любой источник: токен идёт в заголовке, а не в cookie.
+Базовый адрес `http://localhost:8080`. Интерфейс в Docker ходит на тот же API через nginx по относительному пути `/api` на `http://localhost:3000`. Все ручки, кроме входа и `/healthz`, требуют `Authorization: Bearer <JWT>`. Ответы в JSON, ошибки в виде `{"error": "..."}`. CORS разрешает любой источник: токен идёт в заголовке, а не в cookie.
 
 | Метод | Путь | Тело | Ответ |
 |---|---|---|---|
@@ -21,6 +21,8 @@
 | GET | `/api/conversations/{id}/messages?limit=50&before=<seq>` | | 200 `{messages: [VisibleMessage]}`; `limit` от 1 до 200 |
 | POST | `/api/chat` | `{conversation_id, client_message_id, content}` | 200 `text/event-stream` |
 | GET | `/api/checklist`, PATCH `/api/checklist/tasks/{id}` | | см. [02-onboarding.md](02-onboarding.md) |
+| GET | `/api/reviews`, `/api/interns`, POST `/api/reviews/{task_id}/approve`, `/api/reviews/{task_id}/reject` | | только наставник, см. [02-onboarding.md](02-onboarding.md) |
+| GET | `/api/team` | | 200 `{members}`, см. [04-team.md](04-team.md) |
 | GET | `/api/request-types`, `/api/requests`, POST `/api/requests/time-off` | | см. [03-absence.md](03-absence.md) |
 
 Объекты:

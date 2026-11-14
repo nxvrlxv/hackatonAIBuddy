@@ -1,17 +1,18 @@
 # 04. Профиль пользователя и знакомство с командой
 
-Код: `backend/cmd/mcp-buddy/whoami.go`, `backend/cmd/mcp-buddy/teamMembers.go`, `backend/internal/postgres/buddy/users.go`, миграции `0003_initData.up.sql` и `0007_demo_data.up.sql`.
-Тесты: `backend/cmd/mcp-buddy/whoami_test.go`, `backend/cmd/mcp-buddy/teamMembers_test.go`, `backend/internal/postgres/buddy/team_test.go`, `backend/internal/postgres/buddy/users_test.go`.
+Код: `backend/cmd/mcp-buddy/whoami.go`, `backend/cmd/mcp-buddy/teamMembers.go`, `backend/internal/postgres/buddy/users.go`, `backend/internal/httpapi/team.go`, миграции `0003_initData.up.sql` и `0007_demo_data.up.sql`.
+Тесты: `backend/cmd/mcp-buddy/whoami_test.go`, `backend/cmd/mcp-buddy/teamMembers_test.go`, `backend/internal/postgres/buddy/team_test.go`, `backend/internal/postgres/buddy/users_test.go`, `backend/internal/httpapi/team_test.go`.
 
 ## Цель
 
-Buddy знает, с кем говорит: имя, роль, команду и наставника. Стажёр может спросить, кто есть в команде, кто его наставник и к кому идти с вопросом.
+Buddy знает, с кем говорит: имя, роль, команду и наставника. Стажёр может спросить, кто есть в команде, кто его наставник и к кому идти с вопросом. Та же команда видна на главной в блоке «Твоя команда».
 
 ## Пользовательские истории
 
 - «Кто мой наставник?» Саша получает ответ «Анна Смирнова».
 - «Кто есть в моей команде?» Список коллег с ролями: руководитель, наставник, стажёры.
 - «К кому обратиться по задачам команды?» Buddy называет руководителя и наставника.
+- На главной стажёр видит свою команду, его наставник стоит первым.
 
 ## Поведение
 
@@ -44,21 +45,25 @@ Buddy знает, с кем говорит: имя, роль, команду и 
 ```
 Список не включает самого пользователя. Порядок: руководитель, наставники, стажёры, внутри роли по имени. `members` всегда массив.
 
+## REST для главной
+
+`GET /api/team` (за `requireAuth`) → 200 `{"members": [{"id", "full_name", "role", "is_my_mentor"}]}`. Источник и правила те же, что у `team_members`: команда и пользователь из токена, самого пользователя в списке нет, `members` всегда массив. Без токена 401, сбой базы 500 `internal error` без деталей. Интерфейс ставит своего наставника первым.
+
 ## Права и данные
 
 - Команда берётся из токена (`team_id`), поэтому стажёр видит только свою команду.
-- Возвращаются только имя и роль. Логины, контакты и другие персональные данные инструмент не отдаёт.
+- Возвращаются только имя и роль (в REST ещё внутренний `id`). Логины, контакты и другие персональные данные не отдаются.
 
 ## Тестовые данные
 
 | Команда | Руководитель | Наставник | Стажёры |
 |---|---|---|---|
-| Авито Путешествия (`travel`) | Игорь Лебедев | Анна Смирнова (`anna_mentor`) | Саша Иванов (`sasha.intern`), Дмитрий Орлов (`dima.intern`) |
-| Авито Доставка (`delivery`) | Ксения Белова | Василий Пупкин (`vasya_mentor`) | Мария Козлова (`maria.intern`) |
-| Авито Объявления (`adverts`) | Олег Кузнецов | Елена Васильева | Пётр Соколов (`petya.intern`) |
-| Авито Платежи (`payments`) | Наталья Фёдорова | Роман Егоров | Ольга Морозова (`olga.intern`) |
+| Авито Путешествия (`travel`) | Игорь Лебедев (`igor.lead`) | Анна Смирнова (`anna_mentor`) | Саша Иванов (`sasha.intern`), Дмитрий Орлов (`dima.intern`) |
+| Авито Доставка (`delivery`) | Ксения Белова (`ksenia.lead`) | Василий Пупкин (`vasya_mentor`) | Мария Козлова (`maria.intern`) |
+| Авито Объявления (`adverts`) | Олег Кузнецов (`oleg.lead`) | Елена Васильева (`elena_mentor`) | Пётр Соколов (`petya.intern`) |
+| Авито Платежи (`payments`) | Наталья Фёдорова (`natalia.lead`) | Роман Егоров (`roman_mentor`) | Ольга Морозова (`olga.intern`) |
 
-Все имена вымышленные.
+Все имена вымышленные. Описания команд для базы знаний лежат в `data/knowledge/team-<код>/about.md`.
 
 ## Критерии приёмки
 
@@ -68,6 +73,7 @@ Buddy знает, с кем говорит: имя, роль, команду и 
 | `team_members` берёт команду из токена и возвращает массив с пометкой наставника | `teamMembers_test.go::TestTeamMembersTool` |
 | SQL исключает самого пользователя и сортирует по ролям | `team_test.go::TestListTeamMembers` |
 | Профиль читается из базы по id | `users_test.go::TestGetUser` |
+| `/api/team` отдаёт коллег из токена, пустая команда это `[]`, ошибки без деталей | `team_test.go::TestTeamList`, `TestTeamEmptyIsArray`, `TestTeamErrors` |
 | На «Кто мой наставник?» Buddy называет наставника из данных | Вручную, сценарий 4 в [README](../../README.md#порядок-проверки) |
 
 ## Вне рамок
