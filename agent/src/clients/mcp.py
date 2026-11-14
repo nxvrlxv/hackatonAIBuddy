@@ -8,16 +8,24 @@ from mcp.client.streamable_http import streamable_http_client
 
 from chat.models import AgentError, User
 
+# Инструменты имитаций корпоративных систем живут в отдельном MCP-сервере (mcp-corporate).
+CORPORATE_TOOLS = frozenset({"get_request_types", "list_my_requests", "create_time_off_request"})
+
+
 class MCPGateway:
     def __init__(self, settings):
         self.settings = settings
+
+    def url_for(self, name):
+        corporate = getattr(self.settings, "mcp_corporate_url", "")
+        return corporate if corporate and name in CORPORATE_TOOLS else self.settings.mcp_url
 
     async def _call(self, name, arguments, token):
         async with httpx.AsyncClient(
             headers={"Authorization": f"Bearer {token}"},
             timeout=self.settings.timeout,
         ) as client:
-            async with streamable_http_client(self.settings.mcp_url, http_client=client) as streams:
+            async with streamable_http_client(self.url_for(name), http_client=client) as streams:
                 async with ClientSession(streams[0], streams[1],
                     read_timeout_seconds=timedelta(seconds=self.settings.timeout)) as session:
                     await session.initialize()

@@ -138,19 +138,25 @@ services:
       retries: 5
       start_period: 5s
 
-  # TODO(этап 7): mcp-corporate:8091 — main.go пока пустой, бинарь не собирается.
-  # mcp-corporate:
-  #   <<: *backend
-  #   command: ["/app/mcp-corporate"]
-  #   environment:
-  #     <<: *backend-env
-  #     PORT: "8091"
-  #   ports:
-  #     - "8091:8091"
-  #   depends_on:
-  #     migrator:
-  #       condition: service_completed_successfully
-  #   restart: unless-stopped
+  # Имитации корпоративных систем (заявки на отгул). Отдельный MCP-сервер.
+  mcp-corporate:
+    <<: *backend
+    command: ["/app/mcp-corporate"]
+    environment:
+      <<: *backend-env
+      PORT: "8091"
+    ports:
+      - "8091:8091"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8091/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   agent:
     build: ./agent
@@ -164,6 +170,7 @@ services:
       AGENT_SERVICE_TOKEN: ${AGENT_KEY}
       GO_API_URL: http://api:8080
       MCP_URL: http://mcp-buddy:8090/mcp
+      MCP_CORPORATE_URL: http://mcp-corporate:8091/mcp
       OLLAMA_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
     ports:
       - "8001:8001"
@@ -175,6 +182,8 @@ services:
       api:
         condition: service_healthy
       mcp-buddy:
+        condition: service_healthy
+      mcp-corporate:
         condition: service_healthy
     init: true
     restart: unless-stopped

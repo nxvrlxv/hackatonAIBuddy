@@ -1,6 +1,7 @@
 # Отгул: MVP
 
-Go владеет БД, Flask вызывает MCP. Автор определяется по Bearer JWT, а не по аргументам модели.
+Go владеет БД, Flask вызывает MCP. Инструменты заявок отдаёт отдельный сервер mcp-corporate (:8091) —
+имитация корпоративной HR-системы; агент направляет их туда по MCP_CORPORATE_URL. Автор определяется по Bearer JWT, а не по аргументам модели.
 Миграция 0005_requests добавляет buddy.request_types и buddy.requests.
 Тип time_off: start_date/end_date (YYYY-MM-DD, целые дни включительно), reason (необязательная, до 2000 символов).
 Начало не раньше текущей даты по Москве; конец не раньше начала; не длиннее 30 дней.
@@ -31,7 +32,7 @@ get_request_types, create_time_off_request, list_my_requests.
 
 ## Запуск и проверка
 
-Из корня: docker compose up -d --build api mcp-buddy agent
+Из корня: docker compose up -d --build api mcp-buddy mcp-corporate agent
 Мигратор применяет 0005, HTML-демо доступно на http://localhost:8001/demo.
 Из agent: PYTHONPATH=src .venv/bin/python tests/smoke_requests.py
 Проверка создаёт явно помеченную тестовую заявку и оставляет её в БД.

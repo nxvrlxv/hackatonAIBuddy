@@ -32,6 +32,8 @@ class Settings:
     timeout: float
     history_search_enabled: bool
     summary_enabled: bool
+    # Пусто — корпоративные инструменты идут в MCP_URL (один сервер).
+    mcp_corporate_url: str = ""
 
     @property
     def input_budget(self):
@@ -50,6 +52,7 @@ class Settings:
             go_url=required("GO_API_URL") if mode == "go" else "",
             public_go_url=required("PUBLIC_GO_API_URL") if mode == "go" else "",
             mcp_url=required("MCP_URL") if mode == "go" else "",
+            mcp_corporate_url=os.environ.get("MCP_CORPORATE_URL", "").strip() if mode == "go" else "",
             whoami_tool=required("WHOAMI_TOOL") if mode == "go" else "",
             ollama_url=required("OLLAMA_URL"),
             model=required("OLLAMA_MODEL"),
