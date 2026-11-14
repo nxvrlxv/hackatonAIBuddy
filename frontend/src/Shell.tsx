@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
-import { Icon, Logo, Avatar } from './ui'
+import { Icon, Logo, Avatar, Mascot } from './ui'
 import type { User } from './api/types'
 
 export type Tab = 'main' | 'chat'
 
 const NAV: { id: Tab; label: string; icon: 'home' | 'chatOutline' }[] = [
   { id: 'main', label: 'Главная', icon: 'home' },
-  { id: 'chat', label: 'AI-чат', icon: 'chatOutline' },
+  { id: 'chat', label: 'Чат', icon: 'chatOutline' },
 ]
 
 export function Shell({
@@ -24,7 +24,7 @@ export function Shell({
     <div className="shell">
       <aside className="sidebar">
         <div className="sb-logo">
-          <Logo height={24} />
+          <Logo height={28} />
         </div>
 
         <nav className="nav">
@@ -44,7 +44,7 @@ export function Shell({
         <button className="sb-user">
           <Avatar size={26} />
           <span className="sb-user-txt">
-            <b>{user.name} С.</b>
+            <b>{user.short}</b>
             <span>{user.role}</span>
           </span>
           <Icon name="chevronDown" size={13} className="sb-chev" />
@@ -52,6 +52,14 @@ export function Shell({
       </aside>
 
       <main className="main">
+        {/* Арт шапки общий для обеих вкладок и не перерисовывается при их смене:
+            котик и круги стоят на одном месте, а меняется только текст и карточки. */}
+        <div className="head-art" aria-hidden="true">
+          <i className="blob-green" />
+          <i className="blob-pink" />
+          <i className="blob-blue" />
+          <Mascot variant="wave" className="mascot" />
+        </div>
         <div className="screen-in" key={tab} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           {children}
         </div>

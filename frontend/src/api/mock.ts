@@ -1,11 +1,13 @@
-import type { HomeData } from './types'
+import type { HomeData, User } from './types'
 
 /**
  * Временные данные вместо ответов API.
- * Когда бэкенд будет готов — эти константы удаляются, экраны берут данные из client.ts.
+ * Пользователь и чат уже берутся из бэкенда (режим api); онбординг и контакты — пока здесь,
+ * у бэкенда для них ещё нет ручек.
  */
-export const HOME: HomeData = {
-  user: { name: 'Александр', role: 'Стажёр' },
+export const MOCK_USER: User = { name: 'Александр', short: 'Александр С.', role: 'Стажёр' }
+
+export const HOME: Omit<HomeData, 'user'> = {
   focus: [
     { id: 'team', title: 'Познакомиться с командой', status: 'next' },
     { id: 'gitlab', title: 'Получить доступ к GitLab', status: 'next' },
@@ -20,6 +22,6 @@ export const HOME: HomeData = {
   ],
 }
 
-/** Ответ-заглушка вместо LLM. TODO(backend): убрать после подключения /api/chat. */
+/** Ответ-заглушка вместо LLM в режиме mock. */
 export const BUDDY_REPLY =
-  'Это заглушка: бэкенд ещё не подключён. Как только появится API, здесь будет настоящий ответ по базе знаний.'
+  'Это заглушка: бэкенд не подключён. Запусти фронт в режиме api, и здесь будет настоящий ответ по базе знаний.'

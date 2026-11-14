@@ -67,7 +67,7 @@ export function Logo({ height = 26 }: { height?: number }) {
 }
 
 export function Mascot({ variant, alt = '', className, style }: { variant: 'wave' | 'cheeks' | 'avatar'; alt?: string; className?: string; style?: React.CSSProperties }) {
-  return <img className={className} src={`/img/buddy-${variant}.png`} alt={alt} style={style} draggable={false} />
+  return <img className={className} src={`/img/buddy-${variant}.webp`} alt={alt} style={style} draggable={false} />
 }
 
 export function Avatar({ size = 34 }: { size?: number }) {

@@ -7,6 +7,12 @@
   --muted: #5d5f7a;
   --line: #ececf3;
   --purple: #6c2dfa;
+  /* декоративные круги в цветах логотипа Авито: светлые, но насыщеннее прежних */
+  --blob-green: #bdf7d5;
+  --blob-blue: #b8d4fc;
+  --blob-pink: #fcc6ea;
+  --blob-lilac: #e1d5fc;
+  --blob-red: #ffbfc6;
   --purple-2: #8a3dfd;
   --purple-ink: #7b2efd;
   --lavender: #ece5fe;
@@ -47,33 +53,40 @@ img { display: block; }
 .ico-violet { background: linear-gradient(160deg, #a566ff 0%, #8a3dfd 100%); box-shadow: 0 3px 10px rgba(138, 61, 253, .25); }
 /* 34 px в макете */
 .ico { width: 34px; height: 34px; }
-.contact-list .ico { width: 33px; height: 33px; }
-.focus-list .ico { width: 32px; height: 32px; }
+.focus-list .ico, .contact-list .ico { width: 32px; height: 32px; }
 
 /* ─────────────────────────── оболочка ─────────────────────────── */
-/* геометрия снята с кадра макета 1060 × 591: панель 168, карточки с 193, шапка с 202 */
+/* Геометрия по кадру главной (p3, ширина окна 1086): панель 8…176 по x и 22…низ−10 по y,
+   карточки с x=193, заголовок с y=75.5, карточки с y=191. */
 .shell {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 176px minmax(0, 1fr);
   height: 100dvh;
-  padding: 8px;
+  /* правый отступ 8 px — внутри .main: арт шапки доходит до края окна, не вылезая за .main
+     (иначе прокручиваемая область шире экрана и появляется горизонтальная полоса) */
+  padding: 0;
   gap: 0;
 }
 
+/* панель во всю высоту окна, прижата к левому краю (просьба Ивана 14.11) */
 .sidebar {
   display: flex; flex-direction: column; gap: 2px;
-  padding: 24px 13px 27px;
+  margin: 0;
+  padding: 24px 14px 16px;
   background: var(--card);
-  border-radius: 16px;
-  box-shadow: var(--shadow);
+  border-radius: 0;
+  box-shadow: 1px 0 0 #ececf2, 6px 0 24px rgba(30, 30, 60, .04);
   min-height: 0;
 }
-.sb-logo { padding: 0 5px 26px; }
+/* Логотип по центру верха панели: полоса шириной в панель (176), отступ сверху 24, высота 28.
+   На экране входа логотип стоит в той же полосе (.login-brand), поэтому после входа
+   он остаётся на месте и того же размера. */
+.sb-logo { display: flex; justify-content: center; padding: 0; height: 28px; margin-bottom: 29px; }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item {
-  display: flex; align-items: center; gap: 11px;
-  height: 36px; padding: 0 12px;
+  display: flex; align-items: center; gap: 12px;
+  height: 36px; padding: 0 14px;
   border-radius: 8px;
   font-size: 12.6px; font-weight: 700; letter-spacing: -.015em;
   color: var(--ink-2);
@@ -82,13 +95,13 @@ img { display: block; }
 }
 .nav-item .nav-ico { color: var(--ink-2); transition: color .18s ease; }
 .nav-item:hover { background: #f5f3fb; }
-.nav-item.is-active { background: var(--lavender); color: var(--purple-ink); }
+.nav-item.is-active { background: var(--lavender); color: var(--ink-2); }
 .nav-item.is-active .nav-ico { color: var(--purple-ink); }
 
 .sb-user {
   margin-top: auto;
-  display: flex; align-items: center; gap: 8px;
-  height: 41px; padding: 0 6px 0 7px;
+  display: flex; align-items: center; gap: 11px;
+  height: 41px; padding: 0 5px 0 8px;
   border-radius: 9px;
   background: #f1f1f6;
   transition: background-color .18s ease;
@@ -96,69 +109,59 @@ img { display: block; }
   width: 100%;
   flex: none;
 }
-/* 26 px по макету — с 30 имя не влезает в 168 px панели */
 .sb-user .avatar { width: 26px !important; height: 26px !important; }
 .sb-user:hover { background: #eaeaf2; }
-.sb-user-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
-.sb-user-txt b { font-size: 11.2px; font-weight: 750; letter-spacing: -.03em; color: var(--ink-2); white-space: nowrap; }
+.sb-user-txt { display: flex; flex-direction: column; line-height: 14px; min-width: 0; }
+.sb-user-txt b { font-size: 11.6px; font-weight: 750; letter-spacing: -.025em; color: var(--ink-2); white-space: nowrap; }
 .sb-user-txt span { font-size: 10.5px; font-weight: 500; color: #55577a; }
-.sb-chev { margin-left: auto; color: var(--ink-2); opacity: .75; flex: none; width: 13px; }
+.sb-chev { margin-left: auto; color: var(--ink-2); flex: none; width: 13px; }
 
 /* ─────────────────────────── основная область ─────────────────────────── */
 .main {
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
-  padding: 0 0 0 17px;
+  position: relative;
+  /* слева 8, как справа: зазоры от панели и от края окна одинаковые */
+  padding: 0 8px 6px 8px;
+  /* низкое окно (ноутбук 1366 × 600 и меньше): карточки прокручиваются, а не обрезаются */
+  overflow-y: auto;
 }
-/* шапка по кадру p3: заголовок с y≈80, карточки начинаются с y=191 */
-/* 191 px — ровно до верхней границы карточек, чтобы котик доходил до неё, как в макете */
-.page-head { position: relative; flex: none; height: 191px; padding: 58px 0 0; }
-.page-title { font-size: 33px; line-height: 1.02; font-weight: 850; letter-spacing: -.032em; }
-.page-sub { margin-top: 9px; font-size: 13.5px; line-height: 1.4; font-weight: 500; color: var(--muted); max-width: 40ch; letter-spacing: -.015em; }
-/* подзаголовок не залезает под маскота: ограничен 40ch, как остальные */
-.chat-title-sub { max-width: 40ch; }
+.page-head { position: relative; flex: none; height: 191px; padding: 75.5px 0 0 9px; }
+.page-title { position: relative; z-index: 1; font-size: 33px; line-height: 33px; font-weight: 850; letter-spacing: -.032em; }
+.page-sub { position: relative; z-index: 1; margin-top: 9.7px; font-size: 14px; line-height: 19px; font-weight: 500; color: var(--muted); letter-spacing: -.02em; }
 
-/* Арт шапки. Геометрия снята с кадра p3 (1060 × 591): рамка 420 × 191 от x=640.
-   Круги крупные, намеренно срезаны краями; котик стоит поверх голубого круга
-   и уходит низом под карточку. Числа ниже пересчитаны из bbox содержимого PNG,
-   а не подобраны на глаз. */
+/* Арт шапки (один на обе вкладки, рисуется в Shell). Рамка 446 × 191 прижата к правому краю
+   окна (в макете x 640…1086). Круги и котик стоят в координатах исходного кадра внутри рамки. */
 .head-art {
   position: absolute; right: 0; top: 0;
-  width: 420px; height: 191px;
+  width: 446px; height: 191px;
   pointer-events: none; overflow: hidden;
+  transform-origin: 100% 0;
 }
 .head-art > i { position: absolute; display: block; border-radius: 50%; }
-.head-art .blob-green { left: 22px; top: -36px; width: 111px; height: 111px; background: #d3fde4; }
-.head-art .blob-blue { left: 32px; top: 76px; width: 409px; height: 409px; background: #c6ddfd; }
-/* в кадре p3 розовый круг начинается от x=1000 кадра, т.е. 360 px внутри арт-зоны */
-.head-art .blob-pink { left: 360px; top: 52px; width: 220px; height: 220px; background: #fdd7fc; }
-/* размер выведен из замера: в макете худи занимает 188 px по ширине */
-.head-art img { position: absolute; right: 21px; top: 30px; width: 258px; height: auto; }
+.head-art .blob-green { left: 22.5px; top: -35.9px; width: 110.8px; height: 110.8px; background: var(--blob-green); }
+.head-art .blob-blue { left: 31.9px; top: 104.5px; width: 408.8px; height: 408.8px; background: var(--blob-blue); }
+/* розовый круг сдвинут левее макетного (345 → 290): в окне видна заметная часть, а не узкая полоска */
+/* правый круг шапки красный, как красная точка логотипа (просьба Ивана 14.11) */
+.head-art .blob-pink { left: 290px; top: 44px; width: 220px; height: 220px; background: var(--blob-red); }
+/* котик поднят на 12 px выше макета, чтобы бейдж «Б/У» был виден целиком */
+.head-art img { position: absolute; left: 146.5px; top: 8.3px; width: 182.6px; height: auto; max-width: none; }
 
-/* Чат: колонка уже (547 px), шапка ниже — арт прижат к правому краю и сдвинут вверх
-   на 16 px, как в кадре p2. Котик мельче: 139 px видимой ширины против 189 на главной. */
-.head-art.chat { height: 169px; width: 300px; right: 0; }
-.head-art.chat > i { translate: 0 -16px; }
-.head-art.chat .blob-green { left: 111px; top: -36px; }
-.head-art.chat .blob-pink { left: 236px; top: 36px; }
-/* голубой круг в чате: в кадре p2 видна только пологая дуга под котиком */
-.head-art.chat .blob-blue { left: 110px; top: 88px; width: 330px; height: 330px; }
-.head-art.chat img { left: auto; right: 80px; top: 8px; width: 157px; translate: 0 0; }
+/* Шапка чата той же высоты, что у главной: при смене вкладок котик и круги не двигаются. */
 
 .content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 /* ─────────────────────────── главная ─────────────────────────── */
-/* Карточки держат высоту макета (197 / 170 px), а сетка центрируется по вертикали:
-   на высоких окнах остаётся воздух сверху и снизу, а не пустоты внутри карточек. */
+/* Внутренние отступы карточек сняты с кадра p3 (точность 1–2 px). */
 .home {
   display: grid;
   grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
   grid-template-rows: auto auto;
   grid-template-areas: 'focus onb' 'cont contacts';
   align-content: start;
-  gap: 16px 13px;
-  flex: 1; min-height: 0; padding-bottom: 6px;
+  gap: 16px 18px;
+  flex: 1; min-height: 0;
 }
-.focus { grid-area: focus; display: flex; flex-direction: column; }
+.focus { grid-area: focus; }
 .onb { grid-area: onb; }
 .cont { grid-area: cont; }
 .contacts { grid-area: contacts; }
@@ -168,103 +171,102 @@ img { display: block; }
   background: var(--card);
   border-radius: 14px;
   box-shadow: var(--shadow);
-  padding: 14px 16px;
   overflow: hidden;
   min-width: 0;
 }
-.card-title { font-size: 17px; line-height: 1.15; font-weight: 850; letter-spacing: -.025em; }
+.card-title { font-size: 18px; line-height: 18px; font-weight: 850; letter-spacing: -.025em; white-space: nowrap; }
 
-.focus-list { margin-top: 9px; display: flex; flex-direction: column; gap: 3px; }
+.focus { min-height: 197px; padding: 14.5px 15px 12px 16px; }
+.focus .card-title { margin-left: 3px; }
+.focus-list { margin-top: 20.5px; display: flex; flex-direction: column; gap: 4px; }
 .focus-list li {
-  display: flex; align-items: center; gap: 11px;
+  display: flex; align-items: center;
   height: 41px; padding: 0 6px;
-  border: 1px solid #f0f0f5;
-  border-radius: 9px;
+  border: 1px solid #efeff4;
+  border-radius: 10px;
   transition: border-color .18s ease, background-color .18s ease;
 }
 .focus-list li:hover { border-color: #e2e0ee; background: #fcfcfe; }
-.focus-text { flex: 1; font-size: 13.2px; font-weight: 560; letter-spacing: -.015em; color: var(--ink-2); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.focus-text { position: relative; top: -2px; margin-left: 20px; flex: 1; font-size: 13.5px; font-weight: 560; letter-spacing: -.02em; color: var(--ink-2); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill {
-  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-  height: 24px; padding: 0 8px; border-radius: 7px;
-  font-size: 12.4px; font-weight: 700; letter-spacing: -.01em; color: var(--ink-2);
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 24px; padding: 0 9px; border-radius: 7px;
+  font-size: 13.5px; font-weight: 700; letter-spacing: -.01em; color: var(--ink-2);
   white-space: nowrap; flex: none;
 }
-.pill-done { background: #e3fde6; color: #10822d; }
+.pill-done { min-width: 83px; background: #e3fde4; }
 .pill-done .pill-ico { color: #0fb52f; }
-.pill-work { background: #fdf6c4; }
+.pill-work { min-width: 86px; background: #fcf5c1; font-size: 13px; }
 .pill-work .pill-ico { color: #e5ac00; }
-.pill-next { background: #efeff6; }
+.pill-next { min-width: 81px; background: #efeff6; }
 .pill-next .pill-ico { color: #15172b; }
 .ring {
   width: 13px; height: 13px; border-radius: 50%; flex: none;
-  border: 2.4px solid #f0ab00;
-  border-right-color: rgba(240, 171, 0, .25);
-  animation: spin 2.4s linear infinite;
+  border: 2.2px solid #f5a800;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
-.onb { display: flex; flex-direction: column; }
-.onb-count { margin-top: 12px; display: flex; align-items: baseline; gap: 6px; }
-.onb-count b { font-size: 33px; line-height: 1; font-weight: 800; letter-spacing: -.03em; }
-.onb-pct { position: absolute; right: 20px; top: 74px; font-size: 19px; font-weight: 800; letter-spacing: -.02em; color: #8b89a6; }
-.bar { margin-top: 10px; height: 12px; border-radius: 6px; background: #e9e9f4; overflow: hidden; }
+.onb { min-height: 197px; padding: 16.5px 22px 15px 18px; display: flex; flex-direction: column; }
+.onb-count { margin-top: 15.1px; display: flex; align-items: baseline; }
+.onb-count b { font-size: 32px; line-height: 32px; font-weight: 800; letter-spacing: -.02em; }
+.onb-pct { position: absolute; right: 22px; top: 59.3px; font-size: 20px; line-height: 20px; font-weight: 800; letter-spacing: -.02em; color: #767395; }
+.bar { margin-top: 8.4px; height: 12px; border-radius: 6px; background: #e7e7f4; overflow: hidden; }
 .bar-fill {
-  height: 100%; border-radius: 7px;
-  background: linear-gradient(90deg, #16dd3c 0%, #08cd27 100%);
-  box-shadow: 0 0 12px rgba(20, 220, 60, .45);
+  height: 100%; border-radius: 6px;
+  background: #0bda2e;
   animation: fill .8s cubic-bezier(.2, .8, .2, 1) both;
 }
 @keyframes fill { from { width: 0; } }
 .next {
-  margin-top: auto; display: flex; align-items: center; gap: 14px;
+  margin: 20px 0 0 -1px; display: flex; align-items: center; gap: 14px;
   height: 61px; padding: 0 14px; border-radius: 10px; background: #ebfdec;
-  cursor: pointer; transition: background-color .18s ease, transform .18s ease;
-  text-align: left; width: 100%;
+  cursor: pointer; transition: background-color .18s ease;
+  text-align: left; width: calc(100% + 1px);
 }
 .next:hover { background: #e0fbe3; }
 .next:hover .next-ico { transform: translate(2px, -2px); }
 .next-ico {
   display: inline-grid; place-items: center; width: 31px; height: 31px; flex: none;
-  border-radius: 50%; color: #fff; background: linear-gradient(160deg, #22e046 0%, #04c826 100%);
+  border-radius: 50%; color: #fff; background: #0fd02f;
   transition: transform .18s ease;
 }
-.next div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.next b { font-size: 13.6px; font-weight: 750; letter-spacing: -.015em; color: var(--ink-2); }
-.next span { font-size: 13.6px; font-weight: 500; color: #2c2f45; }
+.next div { display: flex; flex-direction: column; min-width: 0; font-size: 14px; line-height: 18px; letter-spacing: -.01em; color: var(--ink-2); }
+.next b { font-weight: 700; line-height: 20px; margin-top: -3px; }
+.next span { font-weight: 500; }
 
-.cont { display: flex; flex-direction: column; min-height: 170px; padding-right: 47%; }
-.cont-text { margin-top: 10px; font-size: 13.4px; line-height: 1.34; font-weight: 500; color: var(--muted); letter-spacing: -.02em; }
+.cont { min-height: 170px; padding: 17.5px 0 12px 25px; display: flex; flex-direction: column; }
+.cont .card-title, .cont-text, .cont-btn { position: relative; z-index: 1; }
+.cont-text { margin-top: 7.2px; font-size: 13.5px; line-height: 18px; font-weight: 500; color: var(--muted); letter-spacing: -.025em; white-space: nowrap; }
 .btn-primary {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 11px;
   height: 36px; padding: 0 17px; border-radius: 8px;
-  color: #fff; font-size: 14.6px; font-weight: 600; letter-spacing: -.01em;
-  background: linear-gradient(180deg, var(--purple-2) 0%, var(--purple) 100%);
+  color: #fff; font-size: 15px; font-weight: 600; letter-spacing: -.01em;
+  background: var(--purple);
   box-shadow: 0 2px 6px rgba(108, 45, 250, .25);
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: transform .18s ease;
   align-self: flex-start;
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(108, 45, 250, .7); }
+.btn-primary:hover { transform: scale(1.03); }
 .btn-primary:active { transform: scale(.98); }
-.cont-btn { margin-top: auto; margin-bottom: 4px; }
-/* Кадр p3: арт 196 × 153 справа в карточке. Сиреневый круг 164.6 px срезан снизу,
-   котик 120.7 px стоит в нём целиком — бейдж «Б/У» виден, а не обрезан краем. */
-.cont-art { position: absolute; right: 10px; top: 4px; width: 196px; height: 150px; overflow: hidden; }
-.cont-halo { position: absolute; left: 17.5px; top: 16px; width: 164.6px; height: 164.6px; border-radius: 50%; background: #ebe3fd; }
-.cont-cat { position: absolute; left: 34px; top: 0; width: 132px; height: auto; }
+.cont-btn { margin: 15.3px 0 0 -1px; width: 171px; }
+/* Арт 196 × 153 справа в карточке: сиреневый круг срезан снизу, котик стоит в нём. */
+.cont-art { position: absolute; right: 16px; top: 2px; width: 196px; height: 153px; overflow: hidden; pointer-events: none; }
+.cont-halo { position: absolute; left: 17.5px; top: 20.8px; width: 164.6px; height: 164.6px; border-radius: 50%; background: var(--blob-lilac); }
+.cont-cat { position: absolute; left: 36.3px; top: 9.5px; width: 120.7px; height: auto; max-width: none; }
 
-.contacts { display: flex; flex-direction: column; }
-.contact-list { margin-top: 9px; display: flex; flex-direction: column; gap: 3px; }
+.contacts { min-height: 170px; padding: 16.5px 16px 12px 17px; }
+.contacts .card-title { margin-left: 2px; }
+/* строки контактов той же геометрии, что строки задач: высота 41, кружок 32, отступы 6 и 20 */
+.contact-list { margin-top: 9.5px; display: flex; flex-direction: column; gap: 4px; }
 .contact-list li {
-  display: flex; align-items: center; gap: 22px;
-  height: 36px; padding: 0 9px 0 17px;
-  border: 1px solid #f0f0f5; border-radius: 9px;
+  display: flex; align-items: center; gap: 20px;
+  height: 41px; padding: 0 12px 0 6px;
+  border: 1px solid #efeff4; border-radius: 10px;
   cursor: pointer;
   transition: border-color .18s ease, background-color .18s ease;
 }
 .contact-list li:hover { border-color: #dedcec; background: #fcfcfe; }
-.contact-list b { flex: 1; font-size: 13.8px; font-weight: 700; letter-spacing: -.015em; color: var(--ink-2); }
-.contact-list .chev { color: #6a6c82; transition: transform .18s ease; }
+.contact-list b { flex: 1; font-size: 14px; font-weight: 700; letter-spacing: -.01em; color: var(--ink-2); }
+.contact-list .chev { color: #4b4c64; transition: transform .18s ease; }
 .contact-list li:hover .chev { transform: translateX(3px); }
 
 /* ─────────────────────────── чат ─────────────────────────── */
@@ -287,10 +289,12 @@ img { display: block; }
 .chat-top .chat-clear {
   margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
   height: 32px; padding: 0 12px; border-radius: 9px;
+  /* рамка видна всегда, чтобы было понятно, что это кнопка */
+  border: 1px solid #dcdbe7; background: #fff;
   font-size: 12.5px; font-weight: 600; color: var(--muted);
-  transition: background-color .18s ease, color .18s ease;
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
 }
-.chat-top .chat-clear:hover { background: #f4f2fb; color: var(--purple-ink); }
+.chat-top .chat-clear:hover { background: #f4f2fb; border-color: #c9bff5; color: var(--purple-ink); }
 
 .chat-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; scroll-behavior: smooth; }
 .chat-scroll::-webkit-scrollbar { width: 8px; }
@@ -321,20 +325,47 @@ img { display: block; }
 }
 .chip:hover { border-color: #cbbdf7; background: #f4efff; transform: translateY(-1px); }
 
-.msg { display: flex; gap: 10px; margin-bottom: 18px; animation: rise .28s ease-out both; }
-.msg-user { flex-direction: row-reverse; }
-.msg-avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover; margin-top: 2px; }
-.msg-body { display: flex; flex-direction: column; gap: 5px; max-width: min(78%, 620px); min-width: 0; }
-.msg-user .msg-body { align-items: flex-end; }
-.msg-meta { font-size: 12.5px; line-height: 1.2; color: var(--muted); padding: 0 2px; }
+/* Сообщение: сверху строка «аватар · имя · время», под ней пузырь от самого края ленты
+   (у Buddy от левого, у стажёра от правого). .msg-body растворяется (display: contents),
+   и подпись с пузырём становятся ячейками сетки .msg. */
+.msg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'av meta' 'bub bub';
+  align-items: center;
+  column-gap: 8px; row-gap: 6px;
+  margin-bottom: 18px;
+  animation: rise .28s ease-out both;
+}
+/* сообщения, которые уже были в ленте при открытии вкладки, не «всплывают» заново */
+.msg-static { animation: none; }
+.msg-user { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'meta av' 'bub bub'; }
+.msg-avatar, .msg > .avatar { grid-area: av; }
+.msg-avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; object-fit: cover; }
+.msg-body { display: contents; }
+.msg-meta { grid-area: meta; min-width: 0; font-size: 12.5px; line-height: 1.2; color: var(--muted); padding: 0 2px; }
+.msg-user .msg-meta { justify-self: end; }
+.msg .bubble { grid-area: bub; justify-self: start; max-width: min(78%, 620px); }
+.msg-user .bubble { justify-self: end; }
 .msg-meta b { font-weight: 700; color: var(--ink-2); }
 .bubble {
   padding: 11px 15px; border-radius: 14px;
   font-size: 13.8px; line-height: 1.55; font-weight: 500; letter-spacing: -.01em;
   white-space: pre-wrap; word-break: break-word;
 }
-.bubble-user { background: #ecebfb; color: #151619; border-bottom-right-radius: 6px; }
-.bubble-bot { background: #fff; border: 1px solid #ebebf2; color: #151619; box-shadow: 0 2px 10px rgba(40, 40, 80, .05); border-bottom-left-radius: 6px; }
+/* острый угол пузыря смотрит на аватар над ним */
+.bubble-user { background: #ecebfb; color: #151619; border-top-right-radius: 6px; }
+.bubble-bot { background: #fff; border: 1px solid #ebebf2; color: #151619; box-shadow: 0 2px 10px rgba(40, 40, 80, .05); border-top-left-radius: 6px; }
+.bubble-error { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border-color: #f6c9d2; background: #fff7f9; }
+.retry-btn {
+  height: 30px; padding: 0 12px; border-radius: 8px;
+  background: var(--purple); color: #fff;
+  font-size: 12.5px; font-weight: 600;
+  transition: transform .18s ease;
+}
+.retry-btn:hover { transform: scale(1.04); }
+.retry-btn:active { transform: scale(.97); }
+.chat-error-text { color: #d42a4a !important; font-weight: 600 !important; }
 .typing { display: inline-flex; gap: 5px; padding: 4px 2px; }
 .typing i {
   width: 7px; height: 7px; border-radius: 50%; background: #b9a6f3;
@@ -347,13 +378,12 @@ img { display: block; }
 .chat-foot { flex: none; padding: 0 16px 8px; display: flex; flex-direction: column; gap: 6px; }
 .info {
   display: flex; align-items: center; gap: 10px;
-  height: 32px; padding: 0 14px; border-radius: 8px;
+  min-height: 32px; padding: 7px 14px; border-radius: 8px;
   background: #f1effa;
-  font-size: 10.6px; font-weight: 500; letter-spacing: -.015em; color: #23253a;
-  white-space: nowrap; overflow: hidden;
+  font-size: 10.6px; line-height: 14px; font-weight: 500; letter-spacing: -.015em; color: #23253a;
 }
 .info .info-ico { color: #2a2c45; flex: none; }
-.info span { overflow: hidden; text-overflow: ellipsis; }
+/* если не помещается в строку — переносится, а не обрезается */
 
 .composer {
   display: flex; align-items: center; gap: 10px;
@@ -371,12 +401,13 @@ img { display: block; }
   max-height: 112px; padding: 6px 0;
   background: transparent;
 }
-.composer textarea::placeholder { color: #6c6e88; }
+/* подсказка в одну строку: на узком экране обрезается многоточием, а не уходит на вторую строку */
+.composer textarea::placeholder { color: #6c6e88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .send-btn {
   display: grid; place-items: center; flex: none;
   width: 37px; height: 30px; border-radius: 8px;
   color: #fff;
-  background: linear-gradient(135deg, #8a3dfd 0%, #6c24f9 100%);
+  background: var(--purple);
   box-shadow: 0 3px 10px -4px rgba(108, 45, 250, .6);
   transition: transform .18s ease, opacity .18s ease, box-shadow .18s ease;
 }
@@ -385,91 +416,98 @@ img { display: block; }
 .send-btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 
 /* ─────────────────────────── вход ─────────────────────────── */
+/* Рамка 768 × 576 повторяет кадр макета входа (523 × 392, × 1,4685): логотип в левом верхнем углу,
+   две карточки почти во всю рамку, зелёный круг у верхнего края, розовый за правой карточкой.
+   Рамка масштабируется целиком (zoom: var(--k), масштаб считает loginScale.ts), поэтому
+   композиция не разъезжается, а текст и картинки рисуются в новом размере без растягивания. */
 .login-wrap {
+  --k: 1;
   position: relative;
   height: 100dvh; width: 100vw;
-  display: grid; place-items: center;
-  padding: 20px;
-  overflow: hidden;
-  background: radial-gradient(1200px 700px at 78% -10%, #e9fbf0 0%, var(--bg) 55%);
+  display: flex;
+  /* в низком окне рамка прокручивается, а не обрезается; лишнее по горизонтали (круги) срезается */
+  overflow: hidden auto;
+  background: var(--bg);
 }
-/* зелёный блик лежит на фоне страницы, его низ перекрыт карточкой */
-.login-wrap > .blob-green {
-  position: absolute; left: 50%; top: -34px; translate: -50% 0;
-  width: 120px; height: 120px; border-radius: 50%;
-  background: #d6fde6; pointer-events: none;
+.login-frame {
+  position: relative; flex: none;
+  width: 768px; height: 576px;
+  margin: auto;
+  zoom: var(--k);
 }
+.login-frame > i { position: absolute; display: block; border-radius: 50%; pointer-events: none; }
+.login-wrap .blob-green { left: 384px; top: -97px; width: 173px; height: 173px; background: var(--blob-green); }
+.login-wrap .blob-pink { left: 652px; top: 32px; width: 170px; height: 170px; background: var(--blob-pink); }
+/* красный круг (четвёртая точка логотипа) выглядывает из-за левого нижнего угла левой карточки */
+.login-wrap .blob-red { left: -48px; top: 398px; width: 156px; height: 156px; background: var(--blob-red); }
+/* логотип там же и того же размера, что в левой панели после входа (см. .sb-logo); не масштабируется */
+.login-brand { position: absolute; z-index: 1; left: 0; top: 24px; width: 176px; display: flex; justify-content: center; }
 .login {
+  position: absolute; left: 29px; top: 95px;
   display: grid;
-  grid-template-columns: minmax(0, 380px) minmax(0, 400px);
-  gap: 18px;
-  max-width: 820px; width: 100%;
-}
-.login-brand {
-  position: absolute; left: 24px; top: 20px;
-  display: flex; align-items: center; gap: 8px;
+  grid-template-columns: 336px 357px;
+  gap: 13px;
 }
 .login-card {
-  background: var(--card); border-radius: 20px;
+  height: 420px;
+  background: var(--card); border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 32px 34px;
+  padding: 32px 17px 0;
   display: flex; flex-direction: column;
 }
 .login-badge {
-  align-self: flex-start;
-  padding: 4px 11px; border-radius: 12px;
+  align-self: flex-start; margin-left: 6px;
+  height: 25px; padding: 0 11px; border-radius: 13px;
   background: #e9e5fc;
-  font-size: 11.5px; font-weight: 800; letter-spacing: .02em; color: var(--ink-2);
+  font-size: 12.5px; line-height: 25px; font-weight: 800; letter-spacing: .01em; color: var(--ink-2);
 }
-.login-title { margin-top: 18px; font-size: 30px; line-height: 1.14; font-weight: 850; letter-spacing: -.035em; }
-.login-sub { margin-top: 14px; font-size: 13.5px; line-height: 1.5; font-weight: 500; color: var(--muted); letter-spacing: -.015em; }
+.login-title { margin: 15px 0 0 5px; font-size: 31px; line-height: 35px; font-weight: 850; letter-spacing: -.03em; white-space: nowrap; }
+.login-sub { margin: 10px 0 0 5px; font-size: 13.9px; line-height: 21px; font-weight: 500; color: var(--muted); letter-spacing: -.02em; white-space: nowrap; }
 .login-actions { margin-top: 26px; display: flex; flex-direction: column; }
 .lbtn {
-  display: flex; align-items: center; justify-content: center; gap: 12px;
-  height: 48px; padding: 0 18px;
-  border: 1px solid #dcdbe7; border-radius: 13px; background: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 11px;
+  height: 46px; padding: 0 18px;
+  border: 1px solid #dcdbe7; border-radius: 12px; background: #fff;
   box-shadow: 0 1px 3px rgba(30, 30, 60, .04);
-  font-size: 14.5px; font-weight: 700; letter-spacing: -.015em; color: var(--ink-2);
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  font-size: 15px; font-weight: 700; letter-spacing: -.015em; color: var(--ink-2);
+  transition: transform .18s ease, border-color .18s ease;
 }
-.lbtn:hover { transform: translateY(-1px); border-color: #c9c7db; box-shadow: 0 8px 20px -12px rgba(30, 30, 60, .4); }
-.lbtn:active { transform: scale(.985); }
+.lbtn:hover { transform: scale(1.02); border-color: #c9c7db; }
+.lbtn:active { transform: scale(.98); }
 .lbtn:disabled { opacity: .6; cursor: progress; transform: none; }
-.or { display: flex; align-items: center; gap: 14px; margin: 14px 0; font-size: 12.5px; font-weight: 500; color: #45465f; }
+.or { display: flex; align-items: center; gap: 14px; height: 18px; margin: 17px 2px; font-size: 13px; font-weight: 500; color: #33354f; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: #ececf2; }
-.login-note { margin-top: auto; padding-top: 26px; font-size: 10.5px; line-height: 1.5; font-weight: 500; color: #5a5c74; text-align: center; }
+.login-error { margin-top: 10px; font-size: 11.5px; line-height: 15px; font-weight: 600; color: #d42a4a; text-align: center; }
+.login-error + .login-note { margin-top: 6px; }
+.login-note { margin-top: 21px; font-size: 10.5px; line-height: 14px; font-weight: 500; letter-spacing: -.02em; color: #45465f; text-align: center; white-space: nowrap; }
 
-/* Правка кадра p1: арт-зона 343 × 260 сверху карточки, котик 256 px по центру,
-   под ним сиреневый и голубой круги (обрезаны снизу краем арт-зоны).
-   Зелёный блик лежит НАД карточкой на фоне страницы, поэтому он вне клипа. */
-/* зелёный блик виден НАД карточкой на фоне страницы, поэтому он у .login-wrap,
-   а круги и котик обрезаны внутри .login-stage */
+/* Правая карточка: арт 357 × 260 сверху (голубой круг и котик, обрезаны краем арт-зоны),
+   под ним текст. Котик крупный, правая лапа уходит за нижний край — как в макете. */
 .login-art {
-  position: relative; overflow: visible;
-  border-radius: 20px;
+  position: relative;
+  height: 420px;
+  border-radius: 18px;
   background: var(--card);
   box-shadow: var(--shadow);
-  min-height: 420px;
-  display: flex; flex-direction: column; justify-content: flex-end;
-  padding: 26px 28px;
+  overflow: hidden;
+  padding: 289px 0 0 17px;
 }
 .login-stage {
-  position: absolute; left: 0; top: 0; right: 0;
-  height: 260px; overflow: hidden;
-  border-radius: 20px 20px 0 0;
+  position: absolute; left: 0; top: -1px;
+  width: 357px; height: 260px; overflow: hidden;
 }
 .login-stage > i { position: absolute; display: block; border-radius: 50%; }
-/* сиреневый круг крупнее голубого и почти не виден — на макете он как мягкая подложка */
-.login-stage .blob-1 { left: -33px; top: 15px; width: 330px; height: 330px; background: #f0edfd; }
-.login-stage .blob-2 { left: 32px; top: 68px; width: 293px; height: 293px; background: #cde1fd; }
-.login-stage img.cat { position: absolute; left: 50%; top: 5px; translate: -50% 0; width: 256px; height: auto; }
-.login-art h2 { position: relative; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
-.login-art p { position: relative; margin-top: 9px; font-size: 12.5px; line-height: 1.32; font-weight: 500; color: var(--muted); letter-spacing: -.01em; }
+.login-stage .blob-blue { left: 38.9px; top: 68.3px; width: 292.6px; height: 292.6px; background: var(--blob-blue); }
+.login-stage img.cat { position: absolute; left: 55px; top: 19px; width: 244px; height: auto; max-width: none; }
+.login-art h2 { position: relative; font-size: 19.4px; line-height: 20px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+.login-art p { position: relative; margin: 13px 0 0 1px; font-size: 13.1px; line-height: 20px; font-weight: 500; color: var(--muted); letter-spacing: -.01em; white-space: nowrap; }
 
 /* ─────────────────────────── анимации ─────────────────────────── */
 .mascot { transform-origin: 50% 100%; animation: breathe 4.6s ease-in-out infinite; }
 @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.015); } }
-.screen-in { animation: rise .3s ease-out both; }
+.screen-in { animation: appear .25s ease-out both; }
+/* без сдвига: сдвиг вниз на кадр выталкивал контент за окно, и мигала полоса прокрутки */
+@keyframes appear { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -487,13 +525,29 @@ img { display: block; }
     overflow: visible;
     flex: none;
   }
-  .main { overflow-y: auto; }
+  .main { overflow-y: auto; scrollbar-gutter: stable; }
   .chat-card { min-height: 0; }
-  .head-art { width: 210px; height: 132px; }
-  .head-art img { height: 116px; }
-  .head-art.chat img { height: 110px; }
-  .page-sub { max-width: 34ch; }
+  /* арт шапки уменьшается целиком, композиция кругов и котика не ломается */
+  .head-art { transform: scale(.62); }
 }
+
+/* две колонки, но карточки узкие: арт «Продолжить с Buddy» чуть меньше, чтобы не наезжать на текст */
+/* арт шапки уменьшен, но длинный подзаголовок чата доходил до голубого круга: переносим его раньше
+   (у главной подзаголовок и так в две короткие строки, его не трогаем) */
+@media (min-width: 781px) and (max-width: 980px) {
+  .chat-sub { max-width: calc(100% - 300px); }
+}
+
+@media (min-width: 981px) and (max-width: 1040px) {
+  .cont-art { transform: scale(.82); transform-origin: 100% 0; }
+}
+
+/* длинное приветствие главной уже не помещается рядом с артом шапки — арт убирается
+   (в чате заголовок короткий, там арт остаётся) */
+@media (max-width: 780px) {
+  .head-art { display: none; }
+}
+
 
 @media (max-width: 620px) {
   body { overflow: auto; }
@@ -510,25 +564,28 @@ img { display: block; }
     flex-direction: row; align-items: center;
     align-self: start;
     position: sticky; top: 8px; z-index: 5;
+    margin: 0;
     padding: 8px; gap: 4px; min-width: 0;
     border-radius: 14px;
+    box-shadow: var(--shadow);
   }
   .sb-logo { padding: 0; flex: none; }
   .nav { flex-direction: row; min-width: 0; gap: 2px; }
   .nav-item { height: 36px; padding: 0 9px; white-space: nowrap; gap: 8px; }
-  .nav-item .nav-ico { display: none; }
+  /* Icon задаёт display инлайном, поэтому скрытие только через !important */
+  .nav-item .nav-ico { display: none !important; }
   .sb-user { margin-left: auto; margin-top: 0; width: auto; flex: none; padding: 5px; }
   .sb-user-txt { display: none; }
-  .sb-chev { display: none; }
+  .sb-chev { display: none !important; }
   .main { padding: 0 0 0 2px; }
-  .page-head { padding: 18px 0 14px; }
+  .page-head { height: auto; padding: 18px 0 14px; }
+  .sb-logo { margin-bottom: 0; }
   .page-title { font-size: 27px; }
   .head-art { display: none; }
-  .login { grid-template-columns: 1fr; }
-  .login-art { display: none; }
+
   .chat-scroll { padding: 16px; }
   .chat-foot { padding: 0 16px 14px; }
-  .contact-list li { gap: 14px; padding-left: 12px; }
+  .contact-list li { gap: 14px; }
   .cont { padding-right: 40%; }
 }
 
@@ -537,15 +594,40 @@ img { display: block; }
   .sidebar { gap: 4px; padding: 8px; }
   .sb-logo img { height: 20px !important; }
   .nav-item { gap: 7px; font-size: 12.5px; padding: 0 8px; height: 36px; }
-  .nav-item .nav-ico { display: none; }
   .card { padding: 16px; border-radius: 16px; }
   .focus-text { font-size: 13px; }
   .pill { font-size: 11.5px; padding: 0 8px; }
-  .msg-body { max-width: 88%; }
+  .msg .bubble { max-width: 88%; }
   .chat-top { padding: 12px 14px; }
-  .onb-pct { position: static; margin-left: auto; }
-  .onb-count { align-items: baseline; justify-content: flex-start; gap: 10px; }
-  .login-card { padding: 26px 22px; }
+  .onb-pct { right: 16px; top: 58.8px; }
+  .login-card { padding: 22px 18px 24px; }
+  .cont-art { transform: scale(.72); transform-origin: 100% 0; }
+  .cont-text { white-space: normal; }
+  /* задачи переносятся на две строки вместо обрезки «Познакомиться с кома…» */
+  .focus-list li { height: auto; min-height: 41px; padding: 6px; }
+  .focus-text { white-space: normal; top: 0; margin-left: 12px; margin-right: 8px; line-height: 17px; }
+}
+
+/* узкий телефон: котик в «Продолжить с Buddy» уходит в правый нижний угол, под текстом */
+@media (max-width: 420px) {
+  .cont { padding-right: 16px; }
+  .cont-text { padding-right: 34%; }
+  .cont-art { top: auto; bottom: 0; right: 0; transform: scale(.55); transform-origin: 100% 100%; }
+  .cont-text br { display: none; }
+}
+
+/* вход: на узком экране остаётся одна карточка, арт убирается */
+@media (max-width: 739px) {
+  /* рамки нет (масштаб 1): логотип над карточкой, карточка по ширине экрана, но не шире 343 */
+  .login-frame { width: 100%; max-width: 383px; height: auto; padding: 70px 20px 20px; }
+  .login-brand { left: 20px; top: 22px; width: auto; }
+  .login { position: relative; left: 0; top: 0; grid-template-columns: minmax(0, 1fr); }
+  .login-art { display: none; }
+  .login-card { height: auto; padding-bottom: 22px; }
+  .login-title, .login-sub, .login-note { white-space: normal; }
+  .login-wrap .blob-green { left: 58%; top: -80px; width: 140px; height: 140px; }
+  .login-wrap .blob-pink { left: auto; right: -64px; top: 34px; width: 130px; height: 130px; }
+  .login-wrap .blob-red { left: -56px; top: auto; bottom: -24px; width: 130px; height: 130px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

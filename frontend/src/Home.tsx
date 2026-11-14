@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchHome } from './api/client'
-import type { HomeData } from './api/types'
+import type { HomeData, User } from './api/types'
 import { Icon, Icon3d, Mascot } from './ui'
 
 const PILL: Record<string, { cls: string; label: string; ico: 'check' | 'progress' | 'play' }> = {
@@ -14,8 +14,8 @@ const TONE = ['green', 'blue', 'pink'] as const
 const CONTACT_ICON = { mentor: 'user', hr: 'calendarWhite', team: 'users' } as const
 const CONTACT_TONE = { mentor: 'violet', hr: 'blue', team: 'green' } as const
 
-export function Home({ openChat }: { openChat: () => void }) {
-  const [data, setData] = useState<HomeData | null>(null)
+export function Home({ user, openChat }: { user: User; openChat: () => void }) {
+  const [data, setData] = useState<Omit<HomeData, 'user'> | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -27,20 +27,14 @@ export function Home({ openChat }: { openChat: () => void }) {
 
   if (!data) return <div className="content" aria-busy="true" />
 
-  const { user, focus, onboarding, contacts } = data
+  const { focus, onboarding, contacts } = data
   const pct = Math.round((onboarding.done / onboarding.total) * 100)
 
   return (
     <>
-      <header className="page-head screen-in">
+      <header className="page-head">
         <h1 className="page-title">Привет, {user.name}!</h1>
-        <p className="page-sub">Я Buddy — помогу освоиться, разобраться в процессах и пройти адаптацию.</p>
-        <div className="head-art" aria-hidden="true">
-          <i className="blob-green" />
-          <i className="blob-pink" />
-          <i className="blob-blue" />
-          <Mascot variant="wave" className="mascot" />
-        </div>
+        <p className="page-sub">Я Buddy - помогу освоиться, разобраться<br />в процессах и пройти адаптацию.</p>
       </header>
 
       <div className="home content">
@@ -95,7 +89,7 @@ export function Home({ openChat }: { openChat: () => void }) {
             <Mascot variant="cheeks" className="cont-cat mascot" />
           </div>
           <h2 className="card-title">Продолжить с Buddy</h2>
-          <p className="cont-text">Задай вопрос, уточни детали или получи подсказку по онбордингу.</p>
+          <p className="cont-text">Задай вопрос, уточни детали <br />или получи подсказку <br />по онбордингу.</p>
           <button className="btn-primary cont-btn" onClick={openChat}>
             <Icon name="chatSolid" size={18} />
             Открыть чат

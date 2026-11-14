@@ -8,7 +8,11 @@ export interface ChatMessage {
 }
 
 export interface User {
+  /** Имя для приветствия: «Саша». */
   name: string
+  /** Короткая подпись в боковой панели: «Саша И.». */
+  short: string
+  /** Роль по-русски: «Стажёр», «Наставник». */
   role: string
 }
 
@@ -39,4 +43,14 @@ export interface HomeData {
   focus: FocusTask[]
   onboarding: Onboarding
   contacts: Contact[]
+}
+
+/** Колбэки потокового ответа Buddy. */
+export interface StreamHandlers {
+  /** Очередной кусок текста ответа (уже склеенный целиком: весь текст на данный момент). */
+  onText?: (fullText: string) => void
+  /** Служебный статус агента, например «Восстанавливаю контекст». */
+  onStatus?: (text: string) => void
+  /** Внешняя отмена (уход со страницы, «Начать заново»). */
+  signal?: AbortSignal
 }
