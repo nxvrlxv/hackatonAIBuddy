@@ -6,16 +6,17 @@
 |---|---|
 | postgres | PostgreSQL с pgvector; данные в pg_data |
 | migrator | Применяет миграции и завершает работу |
-| ollama | HTTP-сервер диалоговой и embedding-моделей; файлы моделей в ollama_data |
-| ollama-models | Ждёт готовности Ollama, скачивает обе модели и завершается |
+| ollama | HTTP-сервер embedding-модели для поиска; файлы модели в ollama_data. Диалоговая модель — облачный GigaChat, см. [gigachat.md](gigachat.md) |
+| ollama-models | Ждёт готовности Ollama, скачивает embedding-модель и завершается |
 | api | Публичный Go API, авторизация, хранение и SSE-прокси |
 | mcp-buddy | whoami и search_docs; для поиска обращается в Ollama |
-| agent | Flask/LangGraph, обращается в Go, MCP и Ollama |
+| agent | Flask/LangGraph, обращается в Go, MCP и GigaChat; ключ в agent/.env |
 | ingest | Отдельный запуск индексации корпоративных документов |
 
-Загрузка ollama-models:
-1. qwen3-embedding:0.6b — EMBEDDED_MODEL, используется Go.
-2. qwen3:4b-instruct — OLLAMA_MODEL, используется Python. LLM_MODEL Go задан тем же именем.
+Загрузка ollama-models: qwen3-embedding:0.6b — EMBEDDED_MODEL, используется Go.
+Диалоговая модель qwen3:4b-instruct больше не скачивается: агент работает с GigaChat.
+OLLAMA_MODEL и LLM_MODEL остались в .env.example: Go-конфиг требует LLM_MODEL при старте,
+для чата значение не используется.
 
 agent, mcp-buddy и ingest ждут успешного завершения ollama-models.
 Healthcheck Ollama проверяет доступность сервера; наличие моделей обеспечивает
@@ -37,8 +38,8 @@ OLLAMA_URL=http://localhost:11434
 OLLAMA_PORT=11434
 OLLAMA_IMAGE=ollama/ollama:latest
 EMBEDDED_MODEL=qwen3-embedding:0.6b
-OLLAMA_MODEL=qwen3:4b-instruct
-LLM_MODEL=qwen3:4b-instruct
+OLLAMA_MODEL=qwen3:4b-instruct   # не используется для чата
+LLM_MODEL=qwen3:4b-instruct      # обязателен для Go-конфига, для чата не используется
 INDEX_VERSION=qwen3-embedding-06b-v1
 ```
 
@@ -116,12 +117,9 @@ curl http://localhost:11434/api/embed -d '{
   "input":"Проверка доступа к Git"
 }'
 
-curl http://localhost:11434/api/chat -d '{
-  "model":"qwen3:4b-instruct",
-  "messages":[{"role":"user","content":"Ответь одним словом: привет"}],
-  "stream":false
-}'
 ```
+
+Диалоговую модель проверяют через чат интерфейса или /demo: она в GigaChat, а не в Ollama.
 
 qwen3-embedding:0.6b имеет стандартную размерность 1024, совместимую с
 buddy.chunks.embedding vector(1024). [Карточка модели](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B).

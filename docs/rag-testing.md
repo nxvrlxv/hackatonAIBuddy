@@ -65,9 +65,9 @@ docker compose exec postgres psql -U buddy -d buddy -c "SELECT count(*) AS chunk
 - Саша (Путешествия): «Найди через search_docs три ценности Авито. Укажи источник».
   Источник — common/mission-and-values.md.
 - Пётр (Объявления): «Сколько длится курс Академии Аналитиков Авито? Найди в базе знаний».
-  Источник — team-adverts/student.md.
+  Источник — common/playbook/students.md.
 - Ольга (Платежи): «Как устроены кластеры и юниты? Найди в базе знаний».
-  Источник — team-payments/structure.md.
+  Источник — common/playbook/structure.md.
 
 Модель вызывает search_docs, Go вычисляет embedding вопроса и ищет по общим
 документам и документам команды из проверенного токена.
