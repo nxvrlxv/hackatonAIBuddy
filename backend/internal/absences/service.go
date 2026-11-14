@@ -91,6 +91,9 @@ func (s *Service) List(ctx context.Context, uid int64) ([]Request, error) {
 
 func (s *Service) Create(ctx context.Context, uid int64, in Input) (Request, error) {
 	in.Reason = strings.TrimSpace(in.Reason)
+	if strings.TrimSpace(in.EndDate) == "" {
+		in.EndDate = in.StartDate // одна дата — отгул на один день
+	}
 	data, _ := json.Marshal(map[string]string{"start_date": in.StartDate, "end_date": in.EndDate, "reason": in.Reason})
 	// Повтор возвращает исходную заявку, даже если её даты уже прошли.
 	existing, err := scan(s.db.QueryRow(ctx, "SELECT "+columns+" FROM buddy.requests WHERE user_id=$1 AND idempotency_key=$2", uid, in.IdempotencyKey))

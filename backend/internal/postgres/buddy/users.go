@@ -52,3 +52,40 @@ func (r *Repository) GetUserByID(ctx context.Context, userID int64) (*auth.User,
 
 	return &user, nil
 }
+
+// TeamMember — коллега по команде. Логин и хеш пароля наружу не отдаём.
+type TeamMember struct {
+	ID         int64
+	FullName   string
+	Role       string
+	IsMyMentor bool
+}
+
+// ListTeamMembers — все в команде, кроме самого пользователя: лиды, наставники, стажёры.
+// teamID и userID берутся из токена, поэтому чужую команду так не посмотреть.
+func (r *Repository) ListTeamMembers(ctx context.Context, teamID, userID int64) ([]TeamMember, error) {
+	rows, err := r.pool.Query(ctx, `
+	select u.id, u.full_name, u.role, coalesce(u.id = me.mentor_id, false)
+	from buddy.users u
+	left join buddy.users me on me.id = $2
+	where u.team_id = $1 and u.id <> $2
+	order by case u.role when 'lead' then 0 when 'mentor' then 1 else 2 end, u.full_name
+	`, teamID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list team members: %w", err)
+	}
+	defer rows.Close()
+
+	members := []TeamMember{}
+	for rows.Next() {
+		var m TeamMember
+		if err := rows.Scan(&m.ID, &m.FullName, &m.Role, &m.IsMyMentor); err != nil {
+			return nil, fmt.Errorf("scan team member: %w", err)
+		}
+		members = append(members, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list team members rows: %w", err)
+	}
+	return members, nil
+}

@@ -16,7 +16,7 @@ type Type struct {
 }
 type Input struct {
 	StartDate      string `json:"start_date"`
-	EndDate        string `json:"end_date"`
+	EndDate        string `json:"end_date,omitempty"` // пусто — отгул на один день (start_date)
 	Reason         string `json:"reason,omitempty"`
 	IdempotencyKey string `json:"idempotency_key"`
 }

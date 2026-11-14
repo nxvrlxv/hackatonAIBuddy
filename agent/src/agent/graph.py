@@ -48,9 +48,10 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         return json.dumps(gateway.call("list_my_requests", {}, token), ensure_ascii=False)
 
     @tool
-    def create_time_off_request(start_date: str, end_date: str, reason: str = "") -> str:
+    def create_time_off_request(start_date: str, end_date: str = "", reason: str = "") -> str:
         """Создать отгул по явной просьбе оформить. Даты YYYY-MM-DD включительно.
-        Не вызывай для справочного вопроса или пока даты не уточнены. Причина необязательна.
+        Для одного дня передай только start_date (end_date не нужен). Причина необязательна.
+        Не вызывай для справочного вопроса или пока дата начала неизвестна.
         """
         # One mutation per turn; identity and retry key are never chosen by the model.
         return json.dumps(gateway.call("create_time_off_request", {
@@ -58,9 +59,48 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
             "idempotency_key": "time-off:" + turn.run_id,
         }, token), ensure_ascii=False)
 
+    @tool
+    def get_checklist() -> str:
+        """Чек-лист адаптации пользователя: этапы, задачи с id и статусами, прогресс и следующий шаг (next).
+        Используй на вопросы «что мне делать дальше», «какой у меня прогресс», «что осталось»."""
+        return json.dumps(gateway.call("get_checklist", {}, token), ensure_ascii=False)[:6000]
+
+    def resolve_task(task):
+        # Модель передаёт id или часть названия; id находит код, а не LLM.
+        task = str(task).strip()
+        if task.isdigit():
+            return int(task), None
+        checklist = gateway.call("get_checklist", {}, token)
+        tasks = [t for st in checklist.get("stages", []) for t in st.get("tasks", [])]
+        found = [t for t in tasks if task.lower() in t.get("title", "").lower()]
+        if len(found) == 1:
+            return found[0]["id"], None
+        titles = [t["title"] for t in (found or tasks)]
+        return None, {"error": "Уточни задачу: " + ("несколько совпадений" if found else "не найдена"),
+                      "tasks": titles}
+
+    @tool
+    def update_task_status(task: str, status: str = "done") -> str:
+        """Отметить задачу чек-листа. task — часть названия задачи (например «GitLab», «VPN») или её id.
+        status: done (выполнил, по умолчанию), in_progress (начал) или todo.
+        ОБЯЗАТЕЛЬНО вызывай сразу, когда пользователь пишет, что сделал, получил, настроил или прошёл
+        что-то из чек-листа; get_checklist перед этим не нужен. Без этого вызова задача не отмечена."""
+        task_id, problem = resolve_task(task)
+        if problem:
+            return json.dumps(problem, ensure_ascii=False)
+        return json.dumps(gateway.call("update_task_status",
+            {"task_id": task_id, "status": status}, token), ensure_ascii=False)
+
+    @tool
+    def team_members() -> str:
+        """Состав команды пользователя: коллеги, роли (lead, mentor, intern) и кто его наставник (is_my_mentor).
+        Используй на вопросы о команде, коллегах, наставнике и к кому обратиться."""
+        return json.dumps(gateway.call("team_members", {}, token), ensure_ascii=False)[:6000]
+
     tools = [search_docs]
     if settings.mode == "go":
-        tools.extend([get_request_types, list_my_requests, create_time_off_request])
+        tools.extend([get_request_types, list_my_requests, create_time_off_request,
+                      get_checklist, update_task_status, team_members])
     if settings.history_search_enabled:
         tools.append(search_history)
     by_name = {t.name: t for t in tools}

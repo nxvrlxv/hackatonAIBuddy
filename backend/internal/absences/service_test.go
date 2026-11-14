@@ -255,3 +255,14 @@ func TestCreate(t *testing.T) {
 		}
 	})
 }
+
+func TestCreateOneDayDefaultsEndDate(t *testing.T) {
+	db, s := newMock(t)
+	db.ExpectQuery(`idempotency_key=\$2`).WithArgs(int64(3), "k1").WillReturnError(pgx.ErrNoRows)
+	// В JSONB уходит end_date = start_date.
+	db.ExpectQuery(`INSERT`).WithArgs(int64(3), []byte(`{"end_date":"2026-11-20","reason":"","start_date":"2026-11-20"}`), "k1").
+		WillReturnRows(sampleRow())
+	if _, err := s.Create(context.Background(), 3, Input{StartDate: "2026-11-20", IdempotencyKey: "k1"}); err != nil {
+		t.Fatal(err)
+	}
+}

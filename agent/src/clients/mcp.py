@@ -23,7 +23,8 @@ class MCPGateway:
                     await session.initialize()
                     result = await session.call_tool(name, arguments)
         if result.isError:
-            if name in {"get_request_types", "list_my_requests", "create_time_off_request"}:
+            if name in {"get_request_types", "list_my_requests", "create_time_off_request",
+                        "get_checklist", "update_task_status", "team_members"}:
                 return {"error": "\n".join(p.text for p in result.content if p.type == "text")[:2000]}
             raise AgentError("mcp_tool_rejected")
         if result.structuredContent is not None:

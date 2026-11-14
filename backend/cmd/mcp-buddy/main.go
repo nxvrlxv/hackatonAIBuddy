@@ -62,6 +62,7 @@ func run() error {
 	RegisterServerTools(server)
 	RegisterSearchDocs(server, svc)
 	RegisterWhoAmI(server, repo)
+	RegisterTeamMembers(server, repo)
 	onboarding.RegisterTools(server, onboarding.NewService(onboarding.NewPostgres(pool)))
 	absences.Register(server, absences.New(pool))
 
