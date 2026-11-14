@@ -1,4 +1,3 @@
-"""Выбор только диалоговой модели. Эмбеддинги остаются на Go/Ollama."""
 from pathlib import Path
 
 def create_model(settings):
@@ -16,7 +15,7 @@ def create_model(settings):
             temperature=0, max_tokens=settings.output_tokens,
             timeout=settings.timeout, streaming=True,
         )
-    from langchain_ollama import ChatOllama
-    return ChatOllama(model=settings.model, base_url=settings.ollama_url,
-        temperature=0, reasoning=False, num_predict=settings.output_tokens,
-        num_ctx=settings.context_tokens, client_kwargs={"timeout": settings.timeout})
+    # from langchain_ollama import ChatOllama
+    # return ChatOllama(model=settings.model, base_url=settings.ollama_url,
+    #     temperature=0, reasoning=False, num_predict=settings.output_tokens,
+    #     num_ctx=settings.context_tokens, client_kwargs={"timeout": settings.timeout})

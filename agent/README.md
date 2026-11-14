@@ -162,3 +162,5 @@ python tests/smoke_compose.py
 ## GigaChat
 
 Настройка облачной модели, OAuth и TLS: [gigachat.md](../docs/gigachat.md). Эмбеддинги остаются на Ollama.
+
+MCP tools/list и правила исполнения: [mcp-discovery.md](../docs/mcp-discovery.md).
