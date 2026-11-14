@@ -80,7 +80,7 @@ class PrefetchAndGuardTests(test_task_review.TaskReviewTests):
     def test_quoted_task_description_is_added_by_code(self):
         base = self.gateway.call.side_effect
 
-        def call(name, args, token):
+        def call(name, args, token, **kwargs):
             if name == "get_checklist":
                 return {"stages": [{"title": "Доступы и инструменты", "tasks": [
                     {"id": 8, "title": "Настроить VPN", "status": "todo",

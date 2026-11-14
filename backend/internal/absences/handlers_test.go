@@ -47,7 +47,7 @@ func errorOf(t *testing.T, rec *httptest.ResponseRecorder) string {
 }
 
 func TestHTTP(t *testing.T) {
-	const body = `{"start_date":"2026-11-20","end_date":"2026-11-20","idempotency_key":"k1"}`
+	const body = `{"start_date":"2026-11-20","end_date":"2026-11-20","idempotency_key":"k1","reason":"семейные дела"}`
 
 	t.Run("types", func(t *testing.T) {
 		db, s := newMock(t)
@@ -83,7 +83,7 @@ func TestHTTP(t *testing.T) {
 		db, s := newMock(t)
 		db.ExpectQuery(`idempotency_key=\$2`).WithArgs(int64(3), "k1").WillReturnError(pgx.ErrNoRows)
 		rec := do(newMux(s, true), http.MethodPost, "/api/requests/time-off",
-			`{"start_date":"2020-01-01","end_date":"2020-01-01","idempotency_key":"k1"}`)
+			`{"start_date":"2020-01-01","end_date":"2020-01-01","idempotency_key":"k1","reason":"семейные дела"}`)
 		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(errorOf(t, rec), "даты") {
 			t.Fatalf("%d", rec.Code)
 		}
@@ -111,7 +111,7 @@ func TestHTTP(t *testing.T) {
 
 	for _, tc := range []struct{ name, body string }{
 		{"broken json", `{"start_date":`},
-		{"unknown field", `{"start_date":"2026-11-20","end_date":"2026-11-20","idempotency_key":"k1","user_id":1}`},
+		{"unknown field", `{"start_date":"2026-11-20","end_date":"2026-11-20","idempotency_key":"k1","reason":"семейные дела","user_id":1}`},
 	} {
 		t.Run(tc.name+" → 400", func(t *testing.T) {
 			_, s := newMock(t)
@@ -197,7 +197,7 @@ func TestMCP(t *testing.T) {
 		db.ExpectQuery(`idempotency_key=\$2`).WithArgs(int64(3), "k1").WillReturnError(pgx.ErrNoRows)
 		db.ExpectQuery(`INSERT`).WithArgs(int64(3), pgxmock.AnyArg(), "k1").WillReturnRows(sampleRow())
 		_, out, err := createTimeOff(s)(ctx, requestFor(t, 3),
-			Input{StartDate: "2026-11-20", EndDate: "2026-11-20", IdempotencyKey: "k1"})
+			Input{StartDate: "2026-11-20", EndDate: "2026-11-20", Reason: "семейные дела", IdempotencyKey: "k1"})
 		if err != nil || out.ID != 7 {
 			t.Fatalf("%+v %v", out, err)
 		}

@@ -14,6 +14,23 @@ from clients.go import GoStore
 from demo.backend import MemoryBackend, DemoGateway
 from memory.context import ContextManager, build_input, input_size
 
+
+def discovered_fixture():
+    specs = {
+        "get_checklist": {},
+        "team_members": {},
+        "get_request_types": {},
+        "list_my_requests": {},
+        "search_docs": {"question": {"type":"string"}},
+        "update_task_status": {"task_id":{"type":"integer"}, "status":{"type":"string"}},
+        "create_time_off_request": {"start_date":{"type":"string"}, "end_date":{"type":"string"},
+                                   "reason":{"type":"string"}, "idempotency_key":{"type":"string"}},
+    }
+    return [{"name":n,"url":"http://test/mcp","description":n,
+             "schema":{"type":"object","properties":p}} for n,p in specs.items()]
+# Test double mirrors tools/list; the production RAM demo does not use MCP.
+DemoGateway.discover = lambda self, token: discovered_fixture()
+
 def make_settings(**overrides):
     values = dict(mode="demo", service_key="test-service", go_url="http://go.test", public_go_url="http://localhost:8080",
         mcp_url="http://mcp.test/mcp", whoami_tool="whoami", ollama_url="http://ollama.test",
@@ -134,16 +151,16 @@ class AgentTests(unittest.TestCase):
         self.gateway.call = Mock(return_value={"id": 42, "status": "submitted"})
         service.model = ToolModel(responses=[
             AIMessage(content="", tool_calls=[{"id": "leave1", "name": "create_time_off_request",
-                "args": {"start_date": "2099-01-20", "end_date": "2099-01-20"}}]),
+                "args": {"start_date": "2099-01-20", "end_date": "2099-01-20", "reason": "семейные дела"}}]),
             AIMessage(content="Заявка №42 подана, ещё не согласована."),
         ])
-        self.assertEqual(events(self.send("Оформи отгул на 20 января 2099"))[-1][0], "done")
+        self.assertEqual(events(self.send("Оформи отгул на 20 января 2099, семейные дела"))[-1][0], "done")
         name, args, token = self.gateway.call.call_args.args
         self.assertEqual(name, "create_time_off_request")
         self.assertEqual(token, "demo-alice")
         self.assertNotIn("user_id", args)
         self.assertTrue(args["idempotency_key"].startswith("time-off:"))
-        self.assertEqual(args["reason"], "")
+        self.assertEqual(args["reason"], "семейные дела")
 
     def test_tool_cycle_saved_with_call_id(self):
         self.app.extensions["chat_service"].model = ToolModel(responses=[

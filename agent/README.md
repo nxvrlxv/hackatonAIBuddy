@@ -158,3 +158,9 @@ python tests/smoke_compose.py
 ## Заявки на отгул
 
 В go-режиме доступны создание и просмотр заявок через MCP. Контракт, ограничения и тестирование: [docs/time-off.md](../docs/time-off.md).
+
+## GigaChat
+
+Настройка облачной модели, OAuth и TLS: [gigachat.md](../docs/gigachat.md). Эмбеддинги остаются на Ollama.
+
+MCP tools/list и правила исполнения: [mcp-discovery.md](../docs/mcp-discovery.md).

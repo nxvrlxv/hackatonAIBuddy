@@ -50,7 +50,7 @@ class TaskReviewTests(test_chat.AgentTests):
         self.service.settings = replace(self.service.settings, mode="go")
         self.status = "in_progress"
 
-        def call(name, args, token):
+        def call(name, args, token, **kwargs):
             if name == "get_checklist":
                 return checklist(self.status)
             if name == "update_task_status":
@@ -114,7 +114,7 @@ class TaskReviewTests(test_chat.AgentTests):
         self.assertNotIn(HONEST, self.text(ev))
 
     def test_failed_update_then_claim_is_corrected(self):
-        self.gateway.call.side_effect = lambda name, args, token: (
+        self.gateway.call.side_effect = lambda name, args, token, **kwargs: (
             checklist() if name == "get_checklist" else {"error": "task already approved"})
         self.model(update_call(), AIMessage(content="Отметил задачу!"))
         ev = events(self.send("Я получил доступ к GitLab"))
@@ -146,7 +146,7 @@ class TaskReviewTests(test_chat.AgentTests):
             self.assertNotIn(HONEST, self.text(ev))
 
     def test_resolver_prefers_the_only_open_match(self):
-        self.gateway.call.side_effect = lambda name, args, token: (
+        self.gateway.call.side_effect = lambda name, args, token, **kwargs: (
             {"stages": [{"tasks": [{"id": 1, "title": "GitLab: аккаунт", "status": "done"},
                                    {"id": 2, "title": "GitLab: репозиторий", "status": "todo"}]}]}
             if name == "get_checklist" else {"task": {"id": args["task_id"], "status": "review"}})

@@ -23,16 +23,18 @@ func TestValidation(t *testing.T) {
 		name, start, end, reason, key string
 		bad                           bool
 	}{
-		{"valid", "2026-11-13", "2026-11-14", "", "a", false},
-		{"one day", "2026-11-20", "2026-11-20", "", "a", false},
-		{"max length", "2026-11-20", "2026-12-19", "", "a", false},
-		{"too long", "2026-11-20", "2026-12-20", "", "a", true},
-		{"past", "2026-11-12", "2026-11-14", "", "a", true},
-		{"reversed", "2026-11-15", "2026-11-14", "", "a", true},
-		{"invalid date", "2026-02-30", "2026-11-14", "", "a", true},
-		{"missing key", "2026-11-13", "2026-11-14", "", "", true},
-		{"blank key", "2026-11-13", "2026-11-14", "", "   ", true},
-		{"key too long", "2026-11-13", "2026-11-14", "", strings.Repeat("k", 201), true},
+		{"missing reason", "2026-11-13", "2026-11-14", "", "a", true},
+		{"blank reason", "2026-11-13", "2026-11-14", "   ", "a", true},
+		{"valid", "2026-11-13", "2026-11-14", "семейные дела", "a", false},
+		{"one day", "2026-11-20", "2026-11-20", "семейные дела", "a", false},
+		{"max length", "2026-11-20", "2026-12-19", "семейные дела", "a", false},
+		{"too long", "2026-11-20", "2026-12-20", "семейные дела", "a", true},
+		{"past", "2026-11-12", "2026-11-14", "семейные дела", "a", true},
+		{"reversed", "2026-11-15", "2026-11-14", "семейные дела", "a", true},
+		{"invalid date", "2026-02-30", "2026-11-14", "семейные дела", "a", true},
+		{"missing key", "2026-11-13", "2026-11-14", "семейные дела", "", true},
+		{"blank key", "2026-11-13", "2026-11-14", "семейные дела", "   ", true},
+		{"key too long", "2026-11-13", "2026-11-14", "семейные дела", strings.Repeat("k", 201), true},
 		{"reason too long", "2026-11-13", "2026-11-14", strings.Repeat("я", 2001), "a", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -260,9 +262,9 @@ func TestCreateOneDayDefaultsEndDate(t *testing.T) {
 	db, s := newMock(t)
 	db.ExpectQuery(`idempotency_key=\$2`).WithArgs(int64(3), "k1").WillReturnError(pgx.ErrNoRows)
 	// В JSONB уходит end_date = start_date.
-	db.ExpectQuery(`INSERT`).WithArgs(int64(3), []byte(`{"end_date":"2026-11-20","reason":"","start_date":"2026-11-20"}`), "k1").
+	db.ExpectQuery(`INSERT`).WithArgs(int64(3), []byte(`{"end_date":"2026-11-20","reason":"семейные дела","start_date":"2026-11-20"}`), "k1").
 		WillReturnRows(sampleRow())
-	if _, err := s.Create(context.Background(), 3, Input{StartDate: "2026-11-20", IdempotencyKey: "k1"}); err != nil {
+	if _, err := s.Create(context.Background(), 3, Input{StartDate: "2026-11-20", Reason: "семейные дела", IdempotencyKey: "k1"}); err != nil {
 		t.Fatal(err)
 	}
 }

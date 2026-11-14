@@ -22,7 +22,7 @@ type ListOutput struct {
 func Register(server *mcp.Server, s *Service) {
 	mcp.AddTool(server, &mcp.Tool{Name: "get_request_types", Description: "Получить доступные типы заявок и требования к полям перед оформлением."}, getTypes(s))
 	mcp.AddTool(server, &mcp.Tool{Name: "list_my_requests", Description: "Посмотреть последние 100 своих заявок и их реальные статусы."}, listMine(s))
-	mcp.AddTool(server, &mcp.Tool{Name: "create_time_off_request", Description: "Создать заявку на отгул на указанные целые дни включительно. Только по явной просьбе оформить; submitted не означает согласование."}, createTimeOff(s))
+	mcp.AddTool(server, &mcp.Tool{Name: "create_time_off_request", Description: "Создать заявку на отгул на указанные целые дни включительно. Требуется причина со слов пользователя: если не указана, сначала спроси её. Не придумывай причину. Только по явной просьбе оформить; submitted не означает согласование."}, createTimeOff(s))
 }
 
 func getTypes(s *Service) mcp.ToolHandlerFor[Empty, TypesOutput] {

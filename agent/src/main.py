@@ -1,6 +1,6 @@
 """Flask-приложение. В go-режиме БД и публичный API принадлежат Go."""
 from flask import Flask
-from langchain_ollama import ChatOllama
+from clients.llm import create_model
 from config import Settings
 from chat.service import ChatService
 from clients.go import GoStore
@@ -14,9 +14,7 @@ def create_app(settings=None, model=None, gateway=None, store_factory=None, summ
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
     if model is None:
-        model = ChatOllama(model=settings.model, base_url=settings.ollama_url,
-            temperature=0, reasoning=False, num_predict=settings.output_tokens,
-            num_ctx=settings.context_tokens, client_kwargs={"timeout": settings.timeout})
+        model = create_model(settings)
     if settings.mode == "demo":
         from demo.backend import DemoGateway, MemoryBackend
         backend = MemoryBackend()

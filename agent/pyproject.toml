@@ -18,7 +18,9 @@ dependencies = [
     "langchain-core>=1,<2",
     "langchain-ollama>=1,<2",
     "httpx>=0.27,<1",
+    "jsonschema>=4.20,<5",
     "mcp>=1.26,<2",
+    "langchain-gigachat>=0.5.1,<1"
 ]
 
 [tool.setuptools]
@@ -31,3 +33,5 @@ include = ["agent*", "api*", "chat*", "clients*", "memory*", "demo*"]
 
 [tool.setuptools.package-data]
 api = ["demo.html"]
+
+clients = ["certs/*.pem"]

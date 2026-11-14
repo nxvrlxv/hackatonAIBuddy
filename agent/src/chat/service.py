@@ -3,6 +3,7 @@ import json
 from contextlib import closing
 from langchain_core.messages import AIMessageChunk
 from chat.models import AgentError
+from chat.scope import refusal_for
 from agent.graph import build_graph
 from memory.context import ContextManager
 from memory.search import HistoryMemory
@@ -43,6 +44,18 @@ class PreparedTurn:
         try:
             yield sse_event("accepted", {"run_id": self.turn.run_id,
                                         "user_message_id": self.turn.user_message.id})
+            refusal = refusal_for(self.turn.user_message.content)
+            if refusal:
+                # Сохраняем обычный завершённый ход, но не запускаем RAG, tools/list или LLM.
+                key = "scope-refusal"
+                message = self.store.append(self.turn, key, role="assistant",
+                                            content=refusal, status="completed")
+                self.finish("completed")
+                yield sse_event("message_start", {"message_id": key})
+                yield sse_event("text_delta", {"message_id": key, "text": refusal})
+                yield sse_event("message_done", {"message_id": key, "stored_message_id": message.id})
+                yield sse_event("done", {"run_id": self.turn.run_id})
+                return
             yield sse_event("status", {"text": "Пользователь проверен. Восстанавливаю контекст"})
             try:
                 memories = (memory.search(str(self.turn.user_message.content))

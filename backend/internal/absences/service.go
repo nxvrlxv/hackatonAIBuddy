@@ -41,6 +41,9 @@ func validate(in Input, now time.Time) error {
 	if days := int(end.Sub(start).Hours()/24) + 1; days > MaxDays {
 		return fmt.Errorf("%w: отгул не длиннее %d дней", ErrInvalid, MaxDays)
 	}
+	if strings.TrimSpace(in.Reason) == "" {
+		return fmt.Errorf("%w: укажите причину отгула", ErrInvalid)
+	}
 	if utf8.RuneCountInString(in.Reason) > 2000 || len(strings.TrimSpace(in.IdempotencyKey)) == 0 || len(in.IdempotencyKey) > 200 {
 		return fmt.Errorf("%w: причина до 2000 символов; требуется ключ повторной отправки до 200 символов", ErrInvalid)
 	}

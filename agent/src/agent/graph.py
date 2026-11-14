@@ -9,7 +9,8 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import START, END, StateGraph
 
 from chat.models import AgentError
-from memory.context import build_input, units, text_of
+from clients.tools import discover_tools
+from memory.context import build_input, units, text_of, merge_system_messages
 
 class State(TypedDict):
     '''Состояние графа'''
@@ -136,36 +137,6 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         """Найти прошлые разговоры этого пользователя с датами/диапазонами источников."""
         return json.dumps([m.model_dump() for m in memory.search(query)], ensure_ascii=False)[:6000]
 
-    @tool
-    def get_request_types() -> str:
-        """Получить типы заявок и обязательные поля перед оформлением отгула."""
-        return json.dumps(gateway.call("get_request_types", {}, token), ensure_ascii=False)
-
-    @tool
-    def list_my_requests() -> str:
-        """Получить свои заявки и статусы. submitted означает подана, а не согласована."""
-        return json.dumps(gateway.call("list_my_requests", {}, token), ensure_ascii=False)
-
-    @tool
-    def create_time_off_request(start_date: str, end_date: str = "", reason: str = "") -> str:
-        """Создать отгул по явной просьбе оформить. Даты YYYY-MM-DD включительно.
-        Для одного дня передай только start_date (end_date не нужен). Причина необязательна.
-        Не вызывай для справочного вопроса или пока дата начала неизвестна.
-        """
-        # One mutation per turn; identity and retry key are never chosen by the model.
-        return json.dumps(gateway.call("create_time_off_request", {
-            "start_date": start_date, "end_date": end_date, "reason": reason,
-            "idempotency_key": "time-off:" + turn.run_id,
-        }, token), ensure_ascii=False)
-
-    @tool
-    def get_checklist() -> str:
-        """Чек-лист адаптации пользователя: этапы, задачи с id и статусами, прогресс и следующий шаг (next).
-        Статусы: review — на проверке у наставника (ещё не выполнена), done — принята наставником.
-        review_comment — почему наставник вернул задачу на доработку.
-        Используй на вопросы «что мне делать дальше», «какой прогресс», «что с моими задачами/проверкой»."""
-        return json.dumps(gateway.call("get_checklist", {}, token), ensure_ascii=False)[:6000]
-
     def resolve_task(task):
         # Модель передаёт id или часть названия; задачу (и её статус) находит код, а не LLM.
         task = str(task).strip()
@@ -214,16 +185,8 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
                                  "Выполненной она станет, когда наставник её примет.")
         return json.dumps(result, ensure_ascii=False)
 
-    @tool
-    def team_members() -> str:
-        """Состав команды пользователя: коллеги, роли (lead, mentor, intern) и кто его наставник (is_my_mentor).
-        Используй на вопросы о команде, коллегах, наставнике и к кому обратиться."""
-        return json.dumps(gateway.call("team_members", {}, token), ensure_ascii=False)[:6000]
-
-    tools = [search_docs]
-    if settings.mode == "go":
-        tools.extend([get_request_types, list_my_requests, create_time_off_request,
-                      get_checklist, update_task_status, team_members])
+    tools = (discover_tools(gateway, token, turn, update_task_status, settings.whoami_tool)
+             if settings.mode == "go" else [search_docs])
     if settings.history_search_enabled:
         tools.append(search_history)
     by_name = {t.name: t for t in tools}
@@ -283,9 +246,9 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         step = state["steps"] + 1
         key = f"assistant:{step}"
         get_stream_writer()({"type": "message_start", "message_id": key})
-        answer = llm.invoke(build_input(
+        answer = llm.invoke(merge_system_messages(build_input(
             user, turn.summary, state["history"], state["messages"], state["memories"],
-            history_search_enabled=settings.history_search_enabled, docs=state.get("docs", "")))
+            history_search_enabled=settings.history_search_enabled, docs=state.get("docs", ""))))
         # Сохранение до сообщения о завершении. При повторной записи key уникален в run.
         stored = store.append(turn, key, role="assistant", content=answer.content,
                               tool_calls=answer.tool_calls, status="completed")
@@ -313,10 +276,10 @@ def build_graph(model, context, settings, user, turn, store, gateway, token, mem
         # показываем ответ только если он честный или содержит вызов инструмента.
         step = state["steps"] + 1
         key = f"assistant:{step}"
-        answer = llm.invoke(build_input(
+        answer = llm.invoke(merge_system_messages(build_input(
             user, turn.summary, state["history"], state["messages"], state["memories"],
             history_search_enabled=settings.history_search_enabled, docs=state.get("docs", ""))
-            + [SystemMessage(content=NUDGE)])
+            + [SystemMessage(content=NUDGE)]))
         messages = [*state["messages"], answer]
         if false_claim(messages):
             return honest({**state, "steps": step})
