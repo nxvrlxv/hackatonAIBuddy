@@ -24,6 +24,18 @@ type Server struct {
 	chat     ChatService  // чаты и история (chat.Service)
 	agent    http.Handler // SSE-прокси на агента (NewAgentProxy)
 	agentKey []byte       // общий секрет с агентом для /internal/agent/*
+	routes   []Routes     // ручки фич (онбординг, отгулы) под requireAuth
+}
+
+// Routes — набор пользовательских ручек фичи. wrap — проверка токена.
+type Routes interface {
+	Register(mux *http.ServeMux, wrap func(http.Handler) http.Handler)
+}
+
+// WithRoutes подключает ручки фич; все они будут за requireAuth.
+func (s *Server) WithRoutes(routes ...Routes) *Server {
+	s.routes = append(s.routes, routes...)
+	return s
 }
 
 func New(users UserStorage, tokens TokenManager, chat ChatService, agent http.Handler, agentKey string) *Server {
@@ -57,6 +69,10 @@ func (s *Server) Handler() http.Handler {
 	NewAgentHandlers(s.chat).Register(mux, func(h http.Handler) http.Handler {
 		return s.requireAgentKey(s.requireAuth(h))
 	})
+
+	for _, r := range s.routes {
+		r.Register(mux, s.requireAuth)
+	}
 
 	return cors(mux)
 }

@@ -4,7 +4,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 COPY src ./src
 RUN pip install --no-cache-dir . \
     && useradd --uid 10001 --create-home agent

@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "ai-buddy"
 version = "0.1.0"
 description = "Agent is named Ai-buddy for hack & change 2026 Avito"
-readme = "README.md"
 requires-python = ">=3.14.4"
 authors = [
     { name = "team mogwarts", email = "mogwarts@team.ru" }

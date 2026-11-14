@@ -23,7 +23,7 @@ def text_of(value):
 
 def units(value):
     # оценка размерности по байтам, НЕ точный tokenizer модели
-    return len(text_of(value).encode("utf-8")) + 32
+    return len(text_of(value)) // 2 + 8
 
 def build_input(user, summary, history, active, memories, history_search_enabled=True):
     prompt = SYSTEM_PROMPT

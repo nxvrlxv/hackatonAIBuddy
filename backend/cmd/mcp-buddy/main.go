@@ -13,6 +13,7 @@ import (
 	"github.com/nxvrlxv/ai-buddy/backend/internal/auth"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/mcpserver"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/onboarding"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/rag"
 
 	"github.com/nxvrlxv/ai-buddy/backend/internal/postgres/buddy"
@@ -60,6 +61,7 @@ func run() error {
 	RegisterServerTools(server)
 	RegisterSearchDocs(server, svc)
 	RegisterWhoAmI(server, repo)
+	onboarding.RegisterTools(server, onboarding.NewService(onboarding.NewPostgres(pool)))
 
 	return mcpserver.Run(ctx, mcpserver.Options{
 		Addr:            ":" + cfg.Port,

@@ -18,6 +18,7 @@ import (
 	"github.com/nxvrlxv/ai-buddy/backend/internal/chat"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/httpapi"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/onboarding"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/postgres/buddy"
 )
 
@@ -61,10 +62,13 @@ func run() error {
 	}
 
 	chats := chat.NewService(repo, historyLimit)
+	checklist := onboarding.NewHandlers(onboarding.NewService(onboarding.NewPostgres(pool)))
 
 	server := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.New(repo, tokens, chats, agent, cfg.AgentKey).Handler(),
+		Addr: ":" + cfg.Port,
+		Handler: httpapi.New(repo, tokens, chats, agent, cfg.AgentKey).
+			WithRoutes(checklist).
+			Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		// WriteTimeout не ставим: /api/chat отдаёт длинный SSE-поток
 	}
