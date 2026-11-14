@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nxvrlxv/ai-buddy/backend/internal/absences"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/auth"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/mcpserver"
@@ -62,6 +63,7 @@ func run() error {
 	RegisterSearchDocs(server, svc)
 	RegisterWhoAmI(server, repo)
 	onboarding.RegisterTools(server, onboarding.NewService(onboarding.NewPostgres(pool)))
+	absences.Register(server, absences.New(pool))
 
 	return mcpserver.Run(ctx, mcpserver.Options{
 		Addr:            ":" + cfg.Port,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/nxvrlxv/ai-buddy/backend/internal/absences"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/auth"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/chat"
 	"github.com/nxvrlxv/ai-buddy/backend/internal/config"
@@ -64,10 +65,11 @@ func run() error {
 	chats := chat.NewService(repo, historyLimit)
 	checklist := onboarding.NewHandlers(onboarding.NewService(onboarding.NewPostgres(pool)))
 
+	requests := absences.New(pool)
 	server := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpapi.New(repo, tokens, chats, agent, cfg.AgentKey).
-			WithRoutes(checklist).
+			WithRoutes(checklist, requests).
 			Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		// WriteTimeout не ставим: /api/chat отдаёт длинный SSE-поток

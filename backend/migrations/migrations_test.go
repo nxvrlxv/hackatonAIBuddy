@@ -67,8 +67,8 @@ func TestEmbeddedMigrationSequence(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, dirty, err := m.Version()
-	if err != nil || version != 5 || dirty {
-		t.Fatalf("expected clean version 5: %d %v %v", version, dirty, err)
+	if err != nil || version != 6 || dirty {
+		t.Fatalf("expected clean version 6: %d %v %v", version, dirty, err)
 	}
 	if err := m.Up(); !errors.Is(err, migrate.ErrNoChange) {
 		t.Fatalf("repeat up: %v", err)
@@ -77,7 +77,7 @@ func TestEmbeddedMigrationSequence(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, dirty, err = m.Version()
-	if err != nil || version != 4 || dirty {
+	if err != nil || version != 5 || dirty {
 		t.Fatalf("rollback: %d %v %v", version, dirty, err)
 	}
 	if err := m.Up(); err != nil {
