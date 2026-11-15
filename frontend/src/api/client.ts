@@ -53,6 +53,8 @@ export class ApiError extends Error {
 const TOKEN_KEY = 'buddy.token'
 let token: string | null = readToken()
 let conversationId: number | null = null
+/** Растёт, когда текущий чат меняется не из загрузки истории: вход, выход, новый чат, первое сообщение. */
+let conversationVersion = 0
 let unauthorized: (() => void) | null = null
 
 function readToken(): string | null {
@@ -83,7 +85,6 @@ const CHAT_OWNER_KEY = 'buddy.chatOwner'
 let chatOwner: string | null = readChatOwner()
 const pendingByUser = new Map<string, boolean>()
 let newChatPending = readNewChat()
-let chatVersion = 0
 
 function readChatOwner(): string | null {
   try { return token ? sessionStorage.getItem(CHAT_OWNER_KEY) : null }
@@ -91,7 +92,7 @@ function readChatOwner(): string | null {
 }
 
 function bindChatOwner(id: number) {
-  chatVersion += 1
+  conversationVersion += 1
   chatOwner = String(id)
   newChatPending = readNewChat()
   try { sessionStorage.setItem(CHAT_OWNER_KEY, chatOwner) }
@@ -130,10 +131,10 @@ export function onUnauthorized(cb: (() => void) | null) {
 
 export function logout() {
   saveToken(null)
-  chatVersion += 1
   chatOwner = null
-  newChatPending = false // персональные метки не удаляем при выходе
+  newChatPending = false // персональные метки сохраняются
   conversationId = null
+  conversationVersion += 1
   historyCache = null
 }
 
@@ -217,6 +218,18 @@ export function newId(): string {
 }
 
 const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms))
+
+/**
+ * UUID v4 для client_message_id. crypto.randomUUID есть только в защищённом контексте
+ * (https или localhost), поэтому при открытии dev-сервера по LAN-IP нужен запасной вариант.
+ */
+function clientMessageId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
 
 /** Вход по логину тестовой учётки; без аргумента — демо-стажёр (кнопка «Войти через Avito ID»). */
 export async function login(loginName: string = DEMO_LOGIN): Promise<User> {
@@ -443,8 +456,12 @@ interface ApiMessage {
   created_at: string
 }
 
-/** История последнего чата пользователя. Пустой массив, если чатов ещё нет. */
-export async function fetchHistory(): Promise<ChatMessage[]> {
+/**
+ * История последнего чата пользователя. Пустой массив, если чатов ещё нет.
+ * null — пока запрос шёл, пользователь отправил сообщение или начал новый чат:
+ * результат устарел, показывать его и переключать текущий чат нельзя.
+ */
+export async function fetchHistory(): Promise<ChatMessage[] | null> {
   if (API_MODE === 'mock') return []
   // «Начать заново» без вопроса: новый чат ещё не создан на бэкенде,
   // и последний чат из списка — прошлый, его показывать не надо
@@ -453,14 +470,17 @@ export async function fetchHistory(): Promise<ChatMessage[]> {
     historyCache = []
     return []
   }
-  const version = chatVersion
+  const version = conversationVersion
   const { conversations } = await request<{ conversations: ApiConversation[] }>('/api/conversations')
-  if (version !== chatVersion) throw new DOMException('Chat changed', 'AbortError')
   const last = conversations[0] // Go отдаёт по updated_at DESC
-  conversationId = last ? last.id : null
-  if (!last) return []
+  if (version !== conversationVersion) return null
+  if (!last) {
+    conversationId = null
+    return []
+  }
+  conversationId = last.id
   const { messages } = await request<{ messages: ApiMessage[] }>(`/api/conversations/${last.id}/messages?limit=100`)
-  if (version !== chatVersion) throw new DOMException('Chat changed', 'AbortError')
+  if (version !== conversationVersion) return null
   return messages.map((m) => ({
     id: `s${m.id}`,
     role: m.role === 'user' ? 'user' : 'bot',
@@ -471,19 +491,22 @@ export async function fetchHistory(): Promise<ChatMessage[]> {
 
 /** «Начать заново»: следующий вопрос откроет новый чат на бэкенде. */
 export function startNewChat() {
-  chatVersion += 1
   conversationId = null
+  conversationVersion += 1
   historyCache = []
   saveNewChat(true)
 }
 
 async function ensureConversation(firstMessage: string): Promise<number> {
   if (conversationId !== null) return conversationId
-  const version = chatVersion
+  const version = conversationVersion
   const title = firstMessage.length > 60 ? `${firstMessage.slice(0, 57)}…` : firstMessage
   const c = await request<ApiConversation>('/api/conversations', { method: 'POST', body: JSON.stringify({ title }) })
-  if (version !== chatVersion) throw new DOMException('Chat changed', 'AbortError')
+  // Пока создавался чат, могли нажать «Начать заново» или войти заново:
+  // такой ответ уже не должен становиться текущим чатом.
+  if (version !== conversationVersion) throw new DOMException('Chat changed', 'AbortError')
   conversationId = c.id
+  conversationVersion += 1 // загрузка истории, начатая до этого, уже не актуальна
   saveNewChat(false) // чат создан — история снова берётся с сервера
   return c.id
 }
@@ -524,7 +547,7 @@ export async function sendMessage(text: string, h: StreamHandlers = {}, idleMs =
       method: 'POST',
       signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
-      body: JSON.stringify({ conversation_id: cid, client_message_id: crypto.randomUUID(), content: text }),
+      body: JSON.stringify({ conversation_id: cid, client_message_id: clientMessageId(), content: text }),
     })
     if (r.status === 401) {
       logout()

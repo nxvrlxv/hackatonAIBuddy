@@ -155,7 +155,7 @@ describe('история', () => {
       return json({}, 404)
     }
     const c = await loadClient()
-    const h = await c.fetchHistory()
+    const h = (await c.fetchHistory())!
     expect(h.map((m) => [m.role, m.text])).toEqual([
       ['user', 'Как получить доступ?'],
       ['bot', 'Через сервис «Доступы».'],
@@ -186,7 +186,7 @@ describe('история', () => {
     }
     let c = await loadClient()
     await c.login()
-    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['старый вопрос'])
+    expect((await c.fetchHistory())!.map((m) => m.text)).toEqual(['старый вопрос'])
 
     c.startNewChat()
     // страница перезагрузилась: модуль новый, sessionStorage тот же
@@ -224,7 +224,7 @@ describe('история', () => {
     // перезагрузка после первого вопроса: открывается уже новый чат
     vi.resetModules()
     c = await loadClient()
-    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['новый вопрос'])
+    expect((await c.fetchHistory())!.map((m) => m.text)).toEqual(['новый вопрос'])
   })
 
   it('повторное «Начать заново» не создаёт чат на бэкенде', async () => {
@@ -287,9 +287,34 @@ describe('история', () => {
     }
     const c = await loadClient()
     await c.login()
-    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['старый вопрос'])
+    expect((await c.fetchHistory())!.map((m) => m.text)).toEqual(['старый вопрос'])
     c.startNewChat()
     expect(await c.fetchHistory()).toEqual([])
+  })
+
+  it('история, пришедшая после отправки, не переключает следующий вопрос на старый чат', async () => {
+    fakeSession()
+    let releaseList!: (r: Response) => void
+    const list = new Promise<Response>((res) => (releaseList = res))
+    routes = (url, init) => {
+      if (url === '/api/conversations' && !init.method) return list
+      if (url === '/api/conversations' && init.method === 'POST')
+        return json({ id: 10, title: 'новый', updated_at: '' }, 201)
+      if (url === '/api/conversations/9/messages?limit=100') return json({ messages: [] })
+      if (url === '/api/chat') return sse([['done', {}]])
+      return backend()(url)
+    }
+    const c = await loadClient()
+    await c.login()
+
+    const history = c.fetchHistory() // список чатов ещё не ответил
+    await c.sendMessage('первый') // уже создаёт новый чат
+    releaseList(json({ conversations: [{ id: 9, title: 'старый', updated_at: '' }] }))
+    expect(await history).toBeNull()
+
+    await c.sendMessage('второй')
+    const chats = calls.filter((x) => x.url === '/api/chat')
+    expect((chats[1].body as { conversation_id: number }).conversation_id).toBe(10)
   })
 
   it('режим mock не ходит в сеть', async () => {
@@ -342,6 +367,18 @@ describe('sendMessage', () => {
     expect((chat.body as { client_message_id: string }).client_message_id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
+  it('без crypto.randomUUID (http-хост) client_message_id всё равно формируется', async () => {
+    vi.stubGlobal('crypto', {})
+    routes = backend()
+    const c = await loadClient()
+    await c.login()
+    await c.sendMessage('?')
+    const chat = calls.find((x) => x.url === '/api/chat')!
+    expect((chat.body as { client_message_id: string }).client_message_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    )
+  })
+
   it('второй вопрос идёт в тот же чат, после startNewChat — в новый', async () => {
     routes = backend()
     const c = await loadClient()
@@ -352,6 +389,33 @@ describe('sendMessage', () => {
     c.startNewChat()
     await c.sendMessage('три')
     expect(calls.filter((x) => x.url === '/api/conversations')).toHaveLength(2)
+  })
+
+  it('«Начать заново» во время создания чата: устаревший ответ не становится текущим чатом', async () => {
+    fakeSession()
+    const posts: Array<(r: Response) => void> = []
+    routes = (url, init) => {
+      if (url === '/api/conversations' && init.method === 'POST')
+        return new Promise<Response>((res) => posts.push(res))
+      if (url === '/api/chat') return sse([['done', {}]])
+      return backend()(url)
+    }
+    const c = await loadClient()
+    await c.login()
+
+    const first = c.sendMessage('первый')
+    c.startNewChat()
+    const second = c.sendMessage('второй')
+    // второй чат создался раньше первого — как при разном времени ответа
+    posts[1](json({ id: 11, title: 'второй', updated_at: '' }, 201))
+    posts[0](json({ id: 10, title: 'первый', updated_at: '' }, 201))
+    await expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    await second
+
+    await c.sendMessage('третий')
+    const chats = calls.filter((x) => x.url === '/api/chat')
+    expect(chats).toHaveLength(2)
+    expect(chats.every((x) => (x.body as { conversation_id: number }).conversation_id === 11)).toBe(true)
   })
 
   it('длинный первый вопрос обрезается в заголовке чата', async () => {
@@ -799,7 +863,7 @@ describe('персональная метка нового чата', () => {
     c.startNewChat()
     c.logout()
     await c.login('other')
-    expect((await c.fetchHistory())[0].text).toBe('Чат второго')
+    expect((await c.fetchHistory())![0].text).toBe('Чат второго')
     c.logout()
     await c.login()
     expect(await c.fetchHistory()).toEqual([])

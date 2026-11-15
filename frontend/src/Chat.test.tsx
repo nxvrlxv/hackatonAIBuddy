@@ -83,6 +83,27 @@ describe('Chat', () => {
     expect(await screen.findByText('Сервер недоступен. Проверь, что бэкенд запущен.')).toBeTruthy()
   })
 
+  it('сообщение, отправленное до загрузки истории, не пропадает из ленты', async () => {
+    let resolveHistory!: (h: ChatMessage[]) => void
+    api.fetchHistory.mockImplementation(() => new Promise<ChatMessage[]>((res) => (resolveHistory = res)))
+    const ctl = controlledReply()
+    renderChat()
+
+    // история ещё грузится, но поле ввода уже доступно
+    await userEvent.type(screen.getByLabelText('Сообщение'), 'быстрый вопрос{Enter}')
+    expect(api.sendMessage).toHaveBeenCalledWith('быстрый вопрос', expect.anything())
+    expect(screen.getByText('быстрый вопрос')).toBeTruthy()
+
+    // старая история пришла после отправки — не должна затереть новое сообщение
+    await act(async () => resolveHistory(HISTORY))
+    expect(screen.getByText('быстрый вопрос')).toBeTruthy()
+    expect(screen.queryByText('Какие ценности у Авито?')).toBeNull()
+
+    await act(async () => ctl.resolve(reply('Отвечаю.')))
+    expect(screen.getByText('Отвечаю.')).toBeTruthy()
+    expect(screen.getByText('быстрый вопрос')).toBeTruthy()
+  })
+
   it('вопрос уходит по Enter, статус и текст ответа видны по мере прихода', async () => {
     const ctl = controlledReply()
     renderChat()
