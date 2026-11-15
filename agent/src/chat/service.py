@@ -54,7 +54,7 @@ class PreparedTurn:
                 s.settings, self.user, self.turn, self.store, s.gateway, self.token, memory, saved)
             initial = {
                 "messages": [self.turn.user_message.as_langchain()],
-                "history": self.turn.history, "memories": memories, "steps": 0,
+                "history": self.turn.history, "memories": memories, "steps": 0, "nudged": False, "docs": "",
             }
             with closing(graph.stream(initial, stream_mode=["messages", "custom"],
                          version="v2", config={"recursion_limit": s.settings.max_steps * 4 + 10})) as parts:

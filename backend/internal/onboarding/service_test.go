@@ -4,22 +4,30 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
 
 // fakeStore записывает вызовы и возвращает заданные результаты.
 type fakeStore struct {
-	rows      []Row
-	task      Task
-	ensureErr error
-	listErr   error
-	updateErr error
+	rows       []Row
+	task       Task
+	reviews    []Review
+	ensureErr  error
+	listErr    error
+	updateErr  error
+	reviewsErr error
+	approveErr error
+	rejectErr  error
+	interns    []InternProgress
+	internsErr error
 
 	calls []string
 	got   struct {
-		userID, taskID int64
-		status         Status
+		userID, taskID, mentorID int64
+		status                   Status
+		comment                  string
 	}
 }
 
@@ -39,6 +47,30 @@ func (f *fakeStore) UpdateStatus(_ context.Context, userID, taskID int64, status
 	f.calls = append(f.calls, "update")
 	f.got.userID, f.got.taskID, f.got.status = userID, taskID, status
 	return f.task, f.updateErr
+}
+
+func (f *fakeStore) ListReviews(_ context.Context, mentorID int64) ([]Review, error) {
+	f.calls = append(f.calls, "reviews")
+	f.got.mentorID = mentorID
+	return f.reviews, f.reviewsErr
+}
+
+func (f *fakeStore) Approve(_ context.Context, mentorID, taskID int64) error {
+	f.calls = append(f.calls, "approve")
+	f.got.mentorID, f.got.taskID = mentorID, taskID
+	return f.approveErr
+}
+
+func (f *fakeStore) Reject(_ context.Context, mentorID, taskID int64, comment string) error {
+	f.calls = append(f.calls, "reject")
+	f.got.mentorID, f.got.taskID, f.got.comment = mentorID, taskID, comment
+	return f.rejectErr
+}
+
+func (f *fakeStore) ListInterns(_ context.Context, mentorID int64) ([]InternProgress, error) {
+	f.calls = append(f.calls, "interns")
+	f.got.mentorID = mentorID
+	return f.interns, f.internsErr
 }
 
 func row(stage, title string, id int64, taskTitle string, status Status) Row {
@@ -123,6 +155,25 @@ func TestBuild(t *testing.T) {
 		}
 	})
 
+	t.Run("review is neither progress nor next", func(t *testing.T) {
+		rows := []Row{
+			row("team", "A", 1, "a", StatusDone),
+			row("team", "A", 2, "b", StatusReview),
+			row("team", "A", 3, "c", StatusTodo),
+		}
+		c := build(rows)
+		if c.Progress != (Progress{Done: 1, Total: 3, Percent: 33}) || c.Next == nil || c.Next.ID != 3 {
+			t.Fatalf("progress %+v, next %+v", c.Progress, c.Next)
+		}
+	})
+
+	t.Run("only done and review: no next", func(t *testing.T) {
+		rows := []Row{row("team", "A", 1, "a", StatusDone), row("team", "A", 2, "b", StatusReview)}
+		if c := build(rows); c.Next != nil {
+			t.Fatalf("next must be nil: %+v", c.Next)
+		}
+	})
+
 	t.Run("percent rounds down", func(t *testing.T) {
 		rows := []Row{
 			row("team", "A", 1, "a", StatusDone),
@@ -173,22 +224,38 @@ func TestChecklist(t *testing.T) {
 func TestSetStatus(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("ok returns task and new progress", func(t *testing.T) {
+	t.Run("done from intern becomes review; progress does not grow", func(t *testing.T) {
 		rows := sashaRows()
-		rows[4].Task.Status = StatusDone // так база выглядит после обновления
-		gitlab := Task{ID: 16, Title: "Доступ к GitLab", Status: StatusDone}
+		rows[4].Task.Status = StatusReview // так база выглядит после обновления
+		gitlab := Task{ID: 16, Title: "Доступ к GitLab", Status: StatusReview}
 		store := &fakeStore{rows: rows, task: gitlab}
 
 		res, err := NewService(store).SetStatus(ctx, 3, 16, StatusDone)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if res.Task != gitlab || res.Progress != (Progress{Done: 5, Total: 11, Percent: 45}) {
+		if res.Task != gitlab || res.Progress != (Progress{Done: 4, Total: 11, Percent: 36}) {
 			t.Fatalf("result: %+v", res)
 		}
 		if !slices.Equal(store.calls, []string{"update", "list"}) ||
-			store.got.taskID != 16 || store.got.status != StatusDone || store.got.userID != 3 {
+			store.got.taskID != 16 || store.got.status != StatusReview || store.got.userID != 3 {
 			t.Fatalf("calls: %v, got %+v", store.calls, store.got)
+		}
+	})
+
+	t.Run("other statuses pass as is", func(t *testing.T) {
+		for _, st := range []Status{StatusTodo, StatusInProgress, StatusReview} {
+			store := &fakeStore{rows: sashaRows()}
+			if _, err := NewService(store).SetStatus(ctx, 3, 16, st); err != nil || store.got.status != st {
+				t.Fatalf("%s: got %q, err %v", st, store.got.status, err)
+			}
+		}
+	})
+
+	t.Run("already approved passes through", func(t *testing.T) {
+		store := &fakeStore{updateErr: ErrAlreadyApproved}
+		if _, err := NewService(store).SetStatus(ctx, 3, 16, StatusInProgress); !errors.Is(err, ErrAlreadyApproved) {
+			t.Fatalf("want ErrAlreadyApproved, got %v", err)
 		}
 	})
 
@@ -216,6 +283,118 @@ func TestSetStatus(t *testing.T) {
 		store := &fakeStore{listErr: errDB}
 		if _, err := NewService(store).SetStatus(ctx, 3, 16, StatusDone); !errors.Is(err, errDB) {
 			t.Fatalf("want errDB, got %v", err)
+		}
+	})
+}
+
+func TestReviews(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ok", func(t *testing.T) {
+		want := []Review{{TaskID: 17, TaskTitle: "Доступ к Jira", Intern: Intern{ID: 3, FullName: "Саша Иванов"}}}
+		store := &fakeStore{reviews: want}
+		got, err := NewService(store).Reviews(ctx, 1)
+		if err != nil || len(got) != 1 || got[0].TaskID != 17 || store.got.mentorID != 1 {
+			t.Fatalf("got %+v err %v mentor %d", got, err, store.got.mentorID)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		if _, err := NewService(&fakeStore{reviewsErr: errDB}).Reviews(ctx, 1); !errors.Is(err, errDB) {
+			t.Fatalf("want errDB, got %v", err)
+		}
+	})
+}
+
+func TestInterns(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("percent is computed for every intern", func(t *testing.T) {
+		store := &fakeStore{interns: []InternProgress{
+			{Intern: Intern{ID: 3, FullName: "Саша Иванов"}, Progress: Progress{Done: 5, Total: 11}, InReview: 1, Stage: "Доступы и инструменты"},
+			{Intern: Intern{ID: 13, FullName: "Дмитрий Орлов"}, Progress: Progress{Done: 0, Total: 11}, Stage: "Знакомство с командой"},
+			{Intern: Intern{ID: 14, FullName: "Без шаблонов"}},
+		}}
+		got, err := NewService(store).Interns(ctx, 1)
+		if err != nil || len(got) != 3 || store.got.mentorID != 1 {
+			t.Fatalf("got %+v err %v mentor %d", got, err, store.got.mentorID)
+		}
+		if got[0].Percent != 45 || got[1].Percent != 0 || got[2].Percent != 0 {
+			t.Fatalf("percents: %d %d %d", got[0].Percent, got[1].Percent, got[2].Percent)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		if _, err := NewService(&fakeStore{internsErr: errDB}).Interns(ctx, 1); !errors.Is(err, errDB) {
+			t.Fatalf("want errDB, got %v", err)
+		}
+	})
+}
+
+func TestApprove(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ok", func(t *testing.T) {
+		store := &fakeStore{}
+		if err := NewService(store).Approve(ctx, 1, 17); err != nil || store.got.mentorID != 1 || store.got.taskID != 17 {
+			t.Fatalf("err %v got %+v", err, store.got)
+		}
+	})
+
+	for _, e := range []error{ErrNotFound, ErrNotInReview, errDB} {
+		t.Run(e.Error(), func(t *testing.T) {
+			if err := NewService(&fakeStore{approveErr: e}).Approve(ctx, 1, 17); !errors.Is(err, e) {
+				t.Fatalf("want %v, got %v", e, err)
+			}
+		})
+	}
+}
+
+func TestReject(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ok passes trimmed comment", func(t *testing.T) {
+		store := &fakeStore{}
+		if err := NewService(store).Reject(ctx, 1, 17, "  Нет доступа к репозиторию \n"); err != nil {
+			t.Fatal(err)
+		}
+		if store.got.comment != "Нет доступа к репозиторию" || store.got.mentorID != 1 || store.got.taskID != 17 {
+			t.Fatalf("got %+v", store.got)
+		}
+	})
+
+	t.Run("limit is in runes, not bytes", func(t *testing.T) {
+		store := &fakeStore{}
+		// 500 кириллических символов = 1000 байт: должно пройти.
+		if err := NewService(store).Reject(ctx, 1, 17, strings.Repeat("я", MaxCommentLen)); err != nil {
+			t.Fatalf("500 runes must pass: %v", err)
+		}
+	})
+
+	cases := []struct {
+		name    string
+		comment string
+		want    error
+	}{
+		{"empty", "", ErrCommentRequired},
+		{"spaces only", " \t\n ", ErrCommentRequired},
+		{"too long", strings.Repeat("я", MaxCommentLen+1), ErrCommentTooLong},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &fakeStore{}
+			if err := NewService(store).Reject(ctx, 1, 17, tc.comment); !errors.Is(err, tc.want) {
+				t.Fatalf("want %v, got %v", tc.want, err)
+			}
+			if len(store.calls) != 0 {
+				t.Fatalf("store must not be called on invalid comment: %v", store.calls)
+			}
+		})
+	}
+
+	t.Run("store error", func(t *testing.T) {
+		if err := NewService(&fakeStore{rejectErr: ErrNotInReview}).Reject(ctx, 1, 17, "x"); !errors.Is(err, ErrNotInReview) {
+			t.Fatalf("want ErrNotInReview, got %v", err)
 		}
 	})
 }

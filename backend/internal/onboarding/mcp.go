@@ -14,7 +14,7 @@ type GetChecklistInput struct{}
 
 type UpdateTaskStatusInput struct {
 	TaskID int64  `json:"task_id" jsonschema:"id задачи из get_checklist"`
-	Status string `json:"status" jsonschema:"новый статус: todo, in_progress или done"`
+	Status string `json:"status" jsonschema:"новый статус: todo, in_progress или done (done = отправить наставнику на проверку)"`
 }
 
 // RegisterTools добавляет инструменты чек-листа. Пользователь всегда берётся из токена.
@@ -22,14 +22,18 @@ func RegisterTools(server *mcp.Server, svc *Service) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "get_checklist",
 		Description: "Чек-лист адаптации текущего стажёра: этапы, задачи с id и статусами, общий прогресс и следующий шаг (next). " +
-			"Используй на вопросы «что мне делать дальше», «какой у меня прогресс», «что осталось». " +
+			"Используй на вопросы «что мне делать дальше», «какой у меня прогресс», «что осталось», «что с проверкой». " +
+			"Статусы: todo — не начата, in_progress — в работе, review — на проверке у наставника (ещё не выполнена), " +
+			"done — принята наставником. review_comment — почему наставник вернул задачу на доработку. " +
 			"У наставников и лидов чек-листа нет — список будет пустым.",
 	}, getChecklist(svc))
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "update_task_status",
 		Description: "Меняет статус задачи из чек-листа адаптации и возвращает задачу с новым прогрессом. " +
-			"task_id бери из get_checklist. Вызывай, когда пользователь сообщает, что выполнил (done) или начал (in_progress) задачу.",
+			"task_id бери из get_checklist. Вызывай, когда пользователь сообщает, что выполнил (done) или начал (in_progress) задачу. " +
+			"Стажёр не может сам завершить задачу: done превращается в review — задача уходит наставнику на проверку. " +
+			"В ответе фактический статус; review — это «отправлено на проверку», а не «выполнено».",
 	}, updateTaskStatus(svc))
 }
 
@@ -61,7 +65,9 @@ func updateTaskStatus(svc *Service) mcp.ToolHandlerFor[UpdateTaskStatusInput, Up
 		case errors.Is(err, ErrInvalidStatus):
 			return nil, UpdateResult{}, errors.New("неверный статус: допустимы todo, in_progress, done")
 		case errors.Is(err, ErrNotFound):
-			return nil, UpdateResult{}, errors.New("задача не найдена в чек-листе пользователя; возьми task_id из get_checklist")
+			return nil, UpdateResult{}, errors.New("task not found: задача не найдена в чек-листе пользователя; возьми task_id из get_checklist")
+		case errors.Is(err, ErrAlreadyApproved):
+			return nil, UpdateResult{}, errors.New("task already approved: задача уже принята наставником, менять её нельзя")
 		default:
 			return nil, UpdateResult{}, errors.New("не удалось обновить задачу")
 		}

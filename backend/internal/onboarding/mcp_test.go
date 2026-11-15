@@ -72,14 +72,15 @@ func TestUpdateTaskStatusTool(t *testing.T) {
 
 	t.Run("ok", func(t *testing.T) {
 		rows := sashaRows()
-		rows[4].Task.Status = StatusDone
-		store := &fakeStore{rows: rows, task: Task{ID: 16, Title: "Доступ к GitLab", Status: StatusDone}}
+		rows[4].Task.Status = StatusReview
+		store := &fakeStore{rows: rows, task: Task{ID: 16, Title: "Доступ к GitLab", Status: StatusReview}}
 		_, out, err := updateTaskStatus(NewService(store))(ctx, requestFor(t, 3),
 			UpdateTaskStatusInput{TaskID: 16, Status: "done"})
-		if err != nil || out.Task.ID != 16 || out.Progress.Done != 5 {
+		// модель просит done — уходит на проверку, прогресс не растёт
+		if err != nil || out.Task.ID != 16 || out.Task.Status != StatusReview || out.Progress.Done != 4 {
 			t.Fatalf("out: %+v %v", out, err)
 		}
-		if store.got.userID != 3 || store.got.taskID != 16 || store.got.status != StatusDone {
+		if store.got.userID != 3 || store.got.taskID != 16 || store.got.status != StatusReview {
 			t.Fatalf("got %+v", store.got)
 		}
 	})
@@ -91,7 +92,8 @@ func TestUpdateTaskStatusTool(t *testing.T) {
 		want  string
 	}{
 		{"invalid status", &fakeStore{}, UpdateTaskStatusInput{TaskID: 16, Status: "closed"}, "неверный статус"},
-		{"not found", &fakeStore{updateErr: ErrNotFound}, UpdateTaskStatusInput{TaskID: 99, Status: "done"}, "задача не найдена"},
+		{"not found", &fakeStore{updateErr: ErrNotFound}, UpdateTaskStatusInput{TaskID: 99, Status: "done"}, "task not found"},
+		{"already approved", &fakeStore{updateErr: ErrAlreadyApproved}, UpdateTaskStatusInput{TaskID: 16, Status: "in_progress"}, "task already approved"},
 		{"db error", &fakeStore{updateErr: errDB}, UpdateTaskStatusInput{TaskID: 16, Status: "done"}, "не удалось обновить"},
 	}
 	for _, tc := range cases {

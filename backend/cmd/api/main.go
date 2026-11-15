@@ -69,7 +69,7 @@ func run() error {
 	server := &http.Server{
 		Addr: ":" + cfg.Port,
 		Handler: httpapi.New(repo, tokens, chats, agent, cfg.AgentKey).
-			WithRoutes(checklist, requests).
+			WithRoutes(checklist, requests, httpapi.NewTeamRoutes(repo)).
 			Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		// WriteTimeout не ставим: /api/chat отдаёт длинный SSE-поток
