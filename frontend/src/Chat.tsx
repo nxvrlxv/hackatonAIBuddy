@@ -43,12 +43,20 @@ export function Chat({
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  /** Пользователь отправил сообщение раньше, чем загрузилась история. */
+  const sentSinceLoad = useRef(false)
 
   useEffect(() => {
     let alive = true
     fetchHistory()
       .then((h) => {
         if (!alive) return
+        // История устарела или уже есть отправленное сообщение: не затираем ленту
+        // и не переключаем текущий чат на тот, что был последним на сервере.
+        if (h === null || sentSinceLoad.current) {
+          setLoaded(true)
+          return
+        }
         setShown((prev) => new Set([...prev, ...h.map((m) => m.id)]))
         // та же лента, что в кэше: не перерисовываем, иначе сообщения мигнут
         setMessages((prev) => (sameFeed(prev, h) ? prev : h))
@@ -152,6 +160,7 @@ export function Chat({
   function submit(text: string) {
     const value = text.trim()
     if (!value || pending) return
+    sentSinceLoad.current = true
     setMessages((prev) => [...prev, { id: newId(), role: 'user', text: value, at: now() }])
     setDraft('')
     void ask(value)
@@ -161,8 +170,10 @@ export function Chat({
     abortRef.current?.abort()
     abortRef.current = null
     startNewChat()
+    sentSinceLoad.current = false
     setMessages([])
     setFailed(null)
+    setHistoryError('')
     setPending(false)
     setPartial('')
     setStatus('')
