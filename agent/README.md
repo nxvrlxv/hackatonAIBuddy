@@ -27,11 +27,14 @@ Go и Python получают один сервисный ключ: Compose по
 
 Все настройки Python читаются из окружения, без скрытых значений по умолчанию.
 Корневой .env.example содержит параметры всего стенда.
-agent/.env — необязательные дополнительные настройки агента; адреса сервисов и
+agent/.env — настройки агента и ключ GigaChat (копия agent/.env.example);
+без GIGACHAT_CREDENTIALS агент не запустится. Адреса сервисов и
 сервисный ключ Compose задаёт явно. Не включайте отложенные возможности в go-режиме.
 
-Ollama запускается отдельным контейнером. ollama-models скачивает
-qwen3-embedding:0.6b и qwen3:4b-instruct до запуска агента и MCP.
+Диалоговая модель — облачный GigaChat (LLM_PROVIDER=gigachat и ключ
+GIGACHAT_CREDENTIALS в agent/.env, см. [gigachat.md](../docs/gigachat.md)).
+Ollama запускается отдельным контейнером только для эмбеддингов: ollama-models
+скачивает qwen3-embedding:0.6b до запуска агента и MCP.
 Внутри Compose OLLAMA_DOCKER_URL=http://ollama:11434;
 для локального Python OLLAMA_URL=http://localhost:11434.
 Подробности, GPU и таблица URL: [Docker Compose](../docs/docker-compose.md).
