@@ -72,6 +72,32 @@ function saveToken(value: string | null) {
   }
 }
 
+// ─── новый чат ───
+/**
+ * «Начать заново» не создаёт чат на бэкенде: он появится с первым вопросом.
+ * Пока вопроса нет, метка в sessionStorage говорит, что показывать историю не нужно, —
+ * иначе после перезагрузки страницы снова откроется прошлый чат.
+ */
+const NEW_CHAT_KEY = 'buddy.newChat'
+let newChatPending = readNewChat()
+
+function readNewChat(): boolean {
+  try {
+    return sessionStorage.getItem(NEW_CHAT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function saveNewChat(value: boolean) {
+  newChatPending = value
+  try {
+    if (value) sessionStorage.setItem(NEW_CHAT_KEY, '1')
+    else sessionStorage.removeItem(NEW_CHAT_KEY)
+  } catch {
+    /* приватный режим: метка живёт только в памяти */
+  }
+}
+
 export function hasSession(): boolean {
   return API_MODE === 'mock' || token !== null
 }
@@ -83,6 +109,7 @@ export function onUnauthorized(cb: (() => void) | null) {
 
 export function logout() {
   saveToken(null)
+  saveNewChat(false)
   conversationId = null
   historyCache = null
 }
@@ -179,6 +206,7 @@ export async function login(loginName: string = DEMO_LOGIN): Promise<User> {
     body: JSON.stringify({ login: loginName.trim() }),
   })
   saveToken(res.token)
+  saveNewChat(false)
   conversationId = null
   historyCache = null // лента прошлого пользователя не должна мелькнуть у нового
   return toUser(res.user)
@@ -393,6 +421,13 @@ interface ApiMessage {
 /** История последнего чата пользователя. Пустой массив, если чатов ещё нет. */
 export async function fetchHistory(): Promise<ChatMessage[]> {
   if (API_MODE === 'mock') return []
+  // «Начать заново» без вопроса: новый чат ещё не создан на бэкенде,
+  // и последний чат из списка — прошлый, его показывать не надо
+  if (newChatPending) {
+    conversationId = null
+    historyCache = []
+    return []
+  }
   const { conversations } = await request<{ conversations: ApiConversation[] }>('/api/conversations')
   const last = conversations[0] // Go отдаёт по updated_at DESC
   conversationId = last ? last.id : null
@@ -409,6 +444,8 @@ export async function fetchHistory(): Promise<ChatMessage[]> {
 /** «Начать заново»: следующий вопрос откроет новый чат на бэкенде. */
 export function startNewChat() {
   conversationId = null
+  historyCache = []
+  saveNewChat(true)
 }
 
 async function ensureConversation(firstMessage: string): Promise<number> {
@@ -416,6 +453,7 @@ async function ensureConversation(firstMessage: string): Promise<number> {
   const title = firstMessage.length > 60 ? `${firstMessage.slice(0, 57)}…` : firstMessage
   const c = await request<ApiConversation>('/api/conversations', { method: 'POST', body: JSON.stringify({ title }) })
   conversationId = c.id
+  saveNewChat(false) // чат создан — история снова берётся с сервера
   return c.id
 }
 

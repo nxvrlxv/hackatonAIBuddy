@@ -59,6 +59,17 @@ async function loadClient(): Promise<Client> {
   return import('./client')
 }
 
+/** sessionStorage, который переживает resetModules — как настоящая перезагрузка страницы. */
+function fakeSession() {
+  const store = new Map<string, string>()
+  vi.stubGlobal('sessionStorage', {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+  })
+  return store
+}
+
 /** Типовой бэкенд: вход, один пустой список чатов, создание чата, поток ответа. */
 function backend(chatFrames: [string, unknown][] = [['done', { run_id: 'r1' }]]) {
   return (url: string): Response => {
@@ -163,6 +174,119 @@ describe('история', () => {
     expect(await c.fetchHistory()).toEqual([])
     await c.sendMessage('Привет')
     expect(calls.map((x) => `${x.method} ${x.url}`)).toEqual(['GET /api/conversations', 'POST /api/conversations', 'POST /api/chat'])
+  })
+
+  it('«Начать заново» переживает перезагрузку: старый чат не возвращается', async () => {
+    fakeSession()
+    routes = (url) => {
+      if (url === '/api/conversations') return json({ conversations: [{ id: 9, title: 'старый', updated_at: '' }] })
+      if (url === '/api/conversations/9/messages?limit=100')
+        return json({ messages: [{ id: 1, role: 'user', content: 'старый вопрос', created_at: '2026-11-13T07:14:00Z' }] })
+      return backend()(url)
+    }
+    let c = await loadClient()
+    await c.login()
+    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['старый вопрос'])
+
+    c.startNewChat()
+    // страница перезагрузилась: модуль новый, sessionStorage тот же
+    vi.resetModules()
+    c = await loadClient()
+    expect(c.hasSession()).toBe(true)
+    expect(await c.fetchHistory()).toEqual([])
+  })
+
+  it('новый чат: перезагрузка → первый вопрос → ещё перезагрузка показывает новый чат', async () => {
+    fakeSession()
+    let conversations = [{ id: 9, title: 'старый', updated_at: '' }]
+    routes = (url, init) => {
+      if (url === '/api/conversations' && init.method === 'POST') {
+        conversations = [{ id: 10, title: 'новый', updated_at: '' }, ...conversations]
+        return json({ id: 10, title: 'новый', updated_at: '' }, 201)
+      }
+      if (url === '/api/conversations') return json({ conversations })
+      if (url === '/api/conversations/10/messages?limit=100')
+        return json({ messages: [{ id: 3, role: 'user', content: 'новый вопрос', created_at: '2026-11-15T09:00:00Z' }] })
+      return backend()(url)
+    }
+    let c = await loadClient()
+    await c.login()
+    c.startNewChat()
+
+    // перезагрузка до первого вопроса: чата на бэкенде ещё нет, лента пустая
+    vi.resetModules()
+    c = await loadClient()
+    expect(await c.fetchHistory()).toEqual([])
+
+    await c.sendMessage('новый вопрос')
+    expect(calls.filter((x) => x.url === '/api/conversations' && x.method === 'POST')).toHaveLength(1)
+
+    // перезагрузка после первого вопроса: открывается уже новый чат
+    vi.resetModules()
+    c = await loadClient()
+    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['новый вопрос'])
+  })
+
+  it('повторное «Начать заново» не создаёт чат на бэкенде', async () => {
+    fakeSession()
+    routes = (url) => {
+      if (url === '/api/conversations') return json({ conversations: [{ id: 9, title: 'старый', updated_at: '' }] })
+      if (url === '/api/conversations/9/messages?limit=100')
+        return json({ messages: [{ id: 1, role: 'user', content: 'старый вопрос', created_at: '2026-11-13T07:14:00Z' }] })
+      return backend()(url)
+    }
+    let c = await loadClient()
+    await c.login()
+    await c.fetchHistory()
+    const before = calls.length
+
+    c.startNewChat()
+    c.startNewChat()
+    expect(calls).toHaveLength(before) // до первого вопроса запросов нет
+
+    vi.resetModules()
+    c = await loadClient()
+    expect(await c.fetchHistory()).toEqual([])
+  })
+
+  it('вход снимает метку нового чата: после входа виден последний чат', async () => {
+    fakeSession()
+    routes = (url) => {
+      if (url === '/api/conversations') return json({ conversations: [{ id: 9, title: 'старый', updated_at: '' }] })
+      if (url === '/api/conversations/9/messages?limit=100')
+        return json({ messages: [{ id: 1, role: 'user', content: 'старый вопрос', created_at: '2026-11-13T07:14:00Z' }] })
+      return backend()(url)
+    }
+    const c = await loadClient()
+    await c.login()
+    c.startNewChat()
+    await c.login() // новый вход, например после выхода из аккаунта
+    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['старый вопрос'])
+  })
+
+  it('sessionStorage недоступен — новый чат работает в памяти вкладки', async () => {
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => {
+        throw new Error('denied')
+      },
+      setItem: () => {
+        throw new Error('denied')
+      },
+      removeItem: () => {
+        throw new Error('denied')
+      },
+    })
+    routes = (url) => {
+      if (url === '/api/conversations') return json({ conversations: [{ id: 9, title: 'старый', updated_at: '' }] })
+      if (url === '/api/conversations/9/messages?limit=100')
+        return json({ messages: [{ id: 1, role: 'user', content: 'старый вопрос', created_at: '2026-11-13T07:14:00Z' }] })
+      return backend()(url)
+    }
+    const c = await loadClient()
+    await c.login()
+    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['старый вопрос'])
+    c.startNewChat()
+    expect(await c.fetchHistory()).toEqual([])
   })
 
   it('режим mock не ходит в сеть', async () => {
