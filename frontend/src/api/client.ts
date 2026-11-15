@@ -79,20 +79,41 @@ function saveToken(value: string | null) {
  * иначе после перезагрузки страницы снова откроется прошлый чат.
  */
 const NEW_CHAT_KEY = 'buddy.newChat'
+const CHAT_OWNER_KEY = 'buddy.chatOwner'
+let chatOwner: string | null = readChatOwner()
+const pendingByUser = new Map<string, boolean>()
 let newChatPending = readNewChat()
+let chatVersion = 0
+
+function readChatOwner(): string | null {
+  try { return token ? sessionStorage.getItem(CHAT_OWNER_KEY) : null }
+  catch { return null }
+}
+
+function bindChatOwner(id: number) {
+  chatVersion += 1
+  chatOwner = String(id)
+  newChatPending = readNewChat()
+  try { sessionStorage.setItem(CHAT_OWNER_KEY, chatOwner) }
+  catch { /* память вкладки */ }
+}
 
 function readNewChat(): boolean {
   try {
-    return sessionStorage.getItem(NEW_CHAT_KEY) === '1'
+    if (chatOwner === null) return false
+    return pendingByUser.get(chatOwner) ?? (sessionStorage.getItem(`${NEW_CHAT_KEY}.${chatOwner}`) === '1')
   } catch {
-    return false
+    return chatOwner !== null && (pendingByUser.get(chatOwner) ?? false)
   }
 }
 function saveNewChat(value: boolean) {
   newChatPending = value
+  if (chatOwner === null) return
+  pendingByUser.set(chatOwner, value)
   try {
-    if (value) sessionStorage.setItem(NEW_CHAT_KEY, '1')
-    else sessionStorage.removeItem(NEW_CHAT_KEY)
+    const key = `${NEW_CHAT_KEY}.${chatOwner}`
+    if (value) sessionStorage.setItem(key, '1')
+    else sessionStorage.removeItem(key)
   } catch {
     /* приватный режим: метка живёт только в памяти */
   }
@@ -109,7 +130,9 @@ export function onUnauthorized(cb: (() => void) | null) {
 
 export function logout() {
   saveToken(null)
-  saveNewChat(false)
+  chatVersion += 1
+  chatOwner = null
+  newChatPending = false // персональные метки не удаляем при выходе
   conversationId = null
   historyCache = null
 }
@@ -206,7 +229,7 @@ export async function login(loginName: string = DEMO_LOGIN): Promise<User> {
     body: JSON.stringify({ login: loginName.trim() }),
   })
   saveToken(res.token)
-  saveNewChat(false)
+  bindChatOwner(res.user.id)
   conversationId = null
   historyCache = null // лента прошлого пользователя не должна мелькнуть у нового
   return toUser(res.user)
@@ -214,7 +237,9 @@ export async function login(loginName: string = DEMO_LOGIN): Promise<User> {
 
 export async function fetchMe(): Promise<User> {
   if (API_MODE === 'mock') return mockUser()
-  return toUser(await request<ApiUser>('/api/me'))
+  const me = await request<ApiUser>('/api/me')
+  if (chatOwner !== String(me.id)) bindChatOwner(me.id)
+  return toUser(me)
 }
 
 // ─── главная ───
@@ -428,11 +453,14 @@ export async function fetchHistory(): Promise<ChatMessage[]> {
     historyCache = []
     return []
   }
+  const version = chatVersion
   const { conversations } = await request<{ conversations: ApiConversation[] }>('/api/conversations')
+  if (version !== chatVersion) throw new DOMException('Chat changed', 'AbortError')
   const last = conversations[0] // Go отдаёт по updated_at DESC
   conversationId = last ? last.id : null
   if (!last) return []
   const { messages } = await request<{ messages: ApiMessage[] }>(`/api/conversations/${last.id}/messages?limit=100`)
+  if (version !== chatVersion) throw new DOMException('Chat changed', 'AbortError')
   return messages.map((m) => ({
     id: `s${m.id}`,
     role: m.role === 'user' ? 'user' : 'bot',
@@ -443,6 +471,7 @@ export async function fetchHistory(): Promise<ChatMessage[]> {
 
 /** «Начать заново»: следующий вопрос откроет новый чат на бэкенде. */
 export function startNewChat() {
+  chatVersion += 1
   conversationId = null
   historyCache = []
   saveNewChat(true)
@@ -450,8 +479,10 @@ export function startNewChat() {
 
 async function ensureConversation(firstMessage: string): Promise<number> {
   if (conversationId !== null) return conversationId
+  const version = chatVersion
   const title = firstMessage.length > 60 ? `${firstMessage.slice(0, 57)}…` : firstMessage
   const c = await request<ApiConversation>('/api/conversations', { method: 'POST', body: JSON.stringify({ title }) })
+  if (version !== chatVersion) throw new DOMException('Chat changed', 'AbortError')
   conversationId = c.id
   saveNewChat(false) // чат создан — история снова берётся с сервера
   return c.id

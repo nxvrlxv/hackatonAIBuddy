@@ -249,7 +249,7 @@ describe('история', () => {
     expect(await c.fetchHistory()).toEqual([])
   })
 
-  it('вход снимает метку нового чата: после входа виден последний чат', async () => {
+  it('выход и повторный вход сохраняют новый пустой чат', async () => {
     fakeSession()
     routes = (url) => {
       if (url === '/api/conversations') return json({ conversations: [{ id: 9, title: 'старый', updated_at: '' }] })
@@ -257,11 +257,14 @@ describe('история', () => {
         return json({ messages: [{ id: 1, role: 'user', content: 'старый вопрос', created_at: '2026-11-13T07:14:00Z' }] })
       return backend()(url)
     }
-    const c = await loadClient()
+    let c = await loadClient()
     await c.login()
     c.startNewChat()
-    await c.login() // новый вход, например после выхода из аккаунта
-    expect((await c.fetchHistory()).map((m) => m.text)).toEqual(['старый вопрос'])
+    c.logout()
+    vi.resetModules() // обновление страницы на экране входа
+    c = await loadClient()
+    await c.login()
+    expect(await c.fetchHistory()).toEqual([])
   })
 
   it('sessionStorage недоступен — новый чат работает в памяти вкладки', async () => {
@@ -777,5 +780,45 @@ describe('апрув задач', () => {
     for (const i of await c.fetchInterns()) expect(i.inReview).toBe(left.filter((r) => r.internId === i.id).length)
     expect((await c.fetchReviews()).map((r) => r.taskId)).toEqual(list.slice(2).map((r) => r.taskId))
     await expect(c.approveTask(list[0].taskId)).rejects.toMatchObject({ status: 404 })
+  })
+})
+
+describe('персональная метка нового чата', () => {
+  it('другой пользователь видит свою историю, возврат первого сохраняет пустой чат', async () => {
+    fakeSession()
+    routes = (url, init) => {
+      if (url === '/api/login') {
+        const other = JSON.parse(String(init.body)).login === 'other'
+        return json({ token: other ? 'T2' : 'T1', user: { ...USER, id: other ? 4 : 3 } })
+      }
+      if (url === '/api/conversations') return json({ conversations: [{ id: 19 }] })
+      return json({ messages: [{ id: 4, role: 'user', content: 'Чат второго', created_at: '2026-11-15T10:00:00Z' }] })
+    }
+    const c = await loadClient()
+    await c.login()
+    c.startNewChat()
+    c.logout()
+    await c.login('other')
+    expect((await c.fetchHistory())[0].text).toBe('Чат второго')
+    c.logout()
+    await c.login()
+    expect(await c.fetchHistory()).toEqual([])
+  })
+
+  it('старое создание чата после выхода не снимает метку пользователя', async () => {
+    fakeSession()
+    let resolve!: (r: Response) => void
+    routes = (url) => url === '/api/login'
+      ? json({ token: 'T1', user: USER })
+      : new Promise<Response>((done) => { resolve = done })
+    const c = await loadClient()
+    await c.login()
+    c.startNewChat()
+    const sending = c.sendMessage('Вопрос')
+    c.logout()
+    await c.login()
+    resolve(json({ id: 99 }))
+    await expect(sending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(await c.fetchHistory()).toEqual([])
   })
 })
