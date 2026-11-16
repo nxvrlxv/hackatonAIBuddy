@@ -9,7 +9,6 @@ type Config struct {
 	DatabaseURL string
 	OllamaURL   string
 	EmbedModel  string
-	LLMModel    string
 	Port        string
 	JWTSecret   string
 	FileStore   string
@@ -33,10 +32,6 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("empty ollama url")
 	}
 
-	llm := os.Getenv("LLM_MODEL")
-	if llm == "" {
-		return nil, fmt.Errorf("model was not found")
-	}
 	fileStore := os.Getenv("KNOWLEDGE_PATH")
 	if fileStore == "" {
 		return nil, fmt.Errorf("store path is not defined")
@@ -65,7 +60,6 @@ func Load() (*Config, error) {
 	return &Config{
 		DatabaseURL: dbURL,
 		Port:        port,
-		LLMModel:    llm,
 		OllamaURL:   ollamaUrl,
 		JWTSecret:   jwtSecret,
 		EmbedModel:  embedModel,

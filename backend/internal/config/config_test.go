@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-var configKeys = []string{"DATABASE_URL", "OLLAMA_URL", "EMBEDDED_MODEL", "LLM_MODEL", "JWT_SECRET", "KNOWLEDGE_PATH", "PORT", "AGENT_KEY", "AGENT_URL"}
+var configKeys = []string{"DATABASE_URL", "OLLAMA_URL", "EMBEDDED_MODEL", "JWT_SECRET", "KNOWLEDGE_PATH", "PORT", "AGENT_KEY", "AGENT_URL"}
 
 // requiredKeys — без них Load обязан вернуть ошибку.
 var requiredKeys = []string{"DATABASE_URL", "OLLAMA_URL", "EMBEDDED_MODEL", "LLM_MODEL", "JWT_SECRET", "KNOWLEDGE_PATH", "AGENT_KEY"}
